@@ -222,33 +222,56 @@ with tab1:
                 st.rerun()
 
 # ==========================================
-# [2페이지] 지출 및 공사 장부 (개선 버전)
+# [2페이지] 지출 및 공사 장부 (한글화 버전)
 # ==========================================
 with tab2:
     st.subheader("💰 건물 유지보수 및 지출 장부")
     
+    # 1. 데이터 불러올 때 영문 컬럼을 한글로 깔끔하게 매핑
+    def load_expenses_korean():
+        res = supabase.table("expenses").select("*").execute()
+        data = res.data
+        if not data:
+            return pd.DataFrame(columns=["id", "날짜", "건물명", "호실", "카테고리", "내역", "비용(원)"])
+        df = pd.DataFrame(data)
+        
+        # Supabase 컬럼명을 한글 UI에 맞게 변경
+        rename_map = {
+            "expense_date": "날짜",
+            "building_name": "건물명",
+            "room_number": "호실",
+            "category": "카테고리",
+            "description": "내역",
+            "amount": "비용(원)"
+        }
+        df = df.rename(columns=rename_map)
+        
+        # 보기 편하게 컬럼 순서 정렬 (id가 있다면 맨 앞, 나머지는 순서대로)
+        desired_cols = ["id", "날짜", "건물명", "호실", "카테고리", "내역", "비용(원)"]
+        existing_cols = [col for col in desired_cols if col in df.columns]
+        # 목록에 없는 나머지 컬럼이 있다면 뒤에 붙여줌
+        other_cols = [col for col in df.columns if col not in desired_cols]
+        
+        return df[existing_cols + other_cols]
+
+    # 실시간 반영을 위해 탭 내부에서 최신 데이터 로드
+    current_expenses_df = load_expenses_korean()
+
     # 🔍 검색 기능
     exp_search = st.text_input("🔍 지출 내역 검색", placeholder="건물명, 호실, 내역 또는 카테고리 검색", key="exp_search_input")
     
-    display_expenses = expenses_df.copy()
+    display_expenses = current_expenses_df.copy()
+    if exp_search and not display_expenses.empty:
+        mask = display_expenses.apply(lambda row: row.astype(str).str.contains(exp_search, case=False).any(), axis=1)
+        display_expenses = display_expenses[mask]
     
-    # 데이터 컬럼 이름 확인 및 처리 (Supabase 테이블과 데이터프레임 컬럼 매칭)
-    # 컬럼이 존재할 경우에만 필터링 수행
-    if not display_expenses.empty:
-        if exp_search:
-            mask = display_expenses.apply(lambda row: row.astype(str).str.contains(exp_search, case=False).any(), axis=1)
-            display_expenses = display_expenses[mask]
-        
-        # 💵 비용 합산 로직 강화 (컬럼명이 '비용' 혹은 'amount'일 경우 대응)
-        cost_col = "비용" if "비용" in display_expenses.columns else "amount"
-        if cost_col in display_expenses.columns:
-            # 숫자가 아닌 문자 제거 후 합산
-            numeric_costs = display_expenses[cost_col].astype(str).str.replace(r'[^\d]', '', regex=True)
-            total_cost = pd.to_numeric(numeric_costs, errors='coerce').sum()
-        else:
-            total_cost = 0
-    else:
-        total_cost = 0
+    # 💵 비용 합산 기능 ('비용(원)' 또는 'amount' 컬럼 대응)
+    total_cost = 0
+    target_col = "비용(원)" if "비용(원)" in display_expenses.columns else ("amount" if "amount" in display_expenses.columns else None)
+    
+    if not display_expenses.empty and target_col:
+        numeric_costs = display_expenses[target_col].astype(str).str.replace(r'[^\d]', '', regex=True)
+        total_cost = pd.to_numeric(numeric_costs, errors='coerce').sum()
     
     st.markdown(
         f"""
@@ -259,7 +282,7 @@ with tab2:
         unsafe_allow_html=True
     )
     
-    # 지출 장부 표 출력
+    # 지출 장부 표 출력 (한글화된 데이터프레임)
     if not display_expenses.empty:
         st.dataframe(display_expenses, use_container_width=True, hide_index=True)
     else:
@@ -267,27 +290,26 @@ with tab2:
         
     st.markdown("---")
     st.markdown("#### ➕ 새로운 지출 내역 등록")
-    with st.form("expense_add_form", clear_on_submit=True):
+    with form_key := st.form("expense_add_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
-        ex_bname = col1.text_input("건물명")
-        ex_rname = col2.text_input("호실")
+        ex_bname = col1.text_input("건물명", placeholder="예: 부산 센토빌")
+        ex_rname = col2.text_input("호실", placeholder="예: 302호")
         
         col3, col4 = st.columns(2)
         ex_category = col3.selectbox("카테고리", ["수리비", "공사비", "세금", "중개수수료", "기타"])
         ex_date = col4.date_input("날짜", value=datetime.today())
         
         ex_desc = st.text_input("상세 내역", placeholder="예: 도어락 교체")
-        ex_amount = st.text_input("비용(원)", value="0")
+        ex_amount = st.text_input("비용(원)", value="100,000")
         
         ex_submitted = st.form_submit_button("지출 내역 저장", type="primary")
-        
         if ex_submitted:
-            if not ex_bname or not ex_desc or not ex_amount:
-                st.warning("필수 입력 항목을 확인해주세요!")
+            if not ex_bname or not ex_desc:
+                st.warning("건물명과 내역은 필수 입력 항목입니다!")
             else:
                 clean_amount = "".join(filter(str.isdigit, str(ex_amount)))
                 
-                # Supabase 삽입 데이터 표준화
+                # Supabase DB 테이블 컬럼명에 맞춰서 데이터 삽입
                 insert_data = {
                     "building_name": ex_bname,
                     "room_number": ex_rname,
@@ -298,7 +320,7 @@ with tab2:
                 }
                 
                 supabase.table("expenses").insert(insert_data).execute()
-                st.success("데이터가 클라우드에 저장되었습니다!")
+                st.success("클라우드에 안전하게 저장되었습니다!")
                 st.rerun()
 
 
