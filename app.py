@@ -56,14 +56,15 @@ def load_expenses():
     
     df = pd.DataFrame(data)
     
-    # DB 컬럼 매핑
-    rename_map = {
-        "building_name": "건물명",
-        "category": "호실",
-        "expense_date": "날짜",
-        "description": "내역",
-        "amount": "비용"
-    }
+    # DB 컬럼을 화면 표시용 한글 순서로 유연하게 매핑
+    rename_map = {}
+    if "building_name" in df.columns: rename_map["building_name"] = "건물명"
+    if "room_number" in df.columns: rename_map["room_number"] = "호실"
+    elif "category" in df.columns: rename_map["category"] = "호실"
+    if "expense_date" in df.columns: rename_map["expense_date"] = "날짜"
+    if "description" in df.columns: rename_map["description"] = "내역"
+    if "amount" in df.columns: rename_map["amount"] = "비용"
+    
     df = df.rename(columns=rename_map)
     
     expected_cols = ["id", "건물명", "호실", "날짜", "내역", "비용"]
@@ -206,13 +207,21 @@ with tab2:
                         
                         if up_exp:
                             clean_amount = "".join(filter(str.isdigit, str(ed_amount)))
+                            # 현재 DB 테이블에 존재하는 컬럼 상태를 동적으로 확인하여 반영
+                            sample_row = raw_list[0] if raw_list else {}
                             update_dict = {
                                 "building_name": ed_bname,
-                                "category": ed_rname,
                                 "expense_date": ed_date,
                                 "description": ed_desc,
-                                "amount": int(clean_amount) if clean_amount else 0
+                                "amount": clean_amount
                             }
+                            if "room_number" in sample_row:
+                                update_dict["room_number"] = ed_rname
+                            elif "category" in sample_row:
+                                update_dict["category"] = ed_rname
+                            else:
+                                update_dict["category"] = ed_rname # 기본값
+                                
                             supabase.table("expenses").update(update_dict).eq("id", row_id).execute()
                             st.success("수정되었습니다!")
                             st.rerun()
@@ -248,13 +257,29 @@ with tab2:
                 st.warning("건물명과 내용은 필수 입력입니다!")
             else:
                 clean_amount = "".join(filter(str.isdigit, str(ex_amount)))
+                
+                # DB에 실제로 있는 컬럼명을 동적으로 체크해서 데이터 구성
+                try:
+                    test_res = supabase.table("expenses").select("*").limit(1).execute()
+                    first_row = test_res.data[0] if test_res.data else {}
+                except:
+                    first_row = {}
+                
                 insert_data = {
                     "building_name": ex_bname,
-                    "category": ex_rname,
                     "expense_date": str(ex_date),
                     "description": ex_desc,
-                    "amount": int(clean_amount) if clean_amount else 0
+                    "amount": clean_amount
                 }
+                
+                if "room_number" in first_row:
+                    insert_data["room_number"] = ex_rname
+                elif "category" in first_row:
+                    insert_data["category"] = ex_rname
+                else:
+                    # 둘 다 없으면 기본적으로 category에 넣기 시도
+                    insert_data["category"] = ex_rname
+
                 supabase.table("expenses").insert(insert_data).execute()
                 st.success("클라우드에 안전하게 저장되었습니다!")
                 st.rerun()
