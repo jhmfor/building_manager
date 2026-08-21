@@ -45,11 +45,14 @@ def load_expenses():
     res = supabase.table("expenses").select("*").execute()
     data = res.data
     if not data:
-        return pd.DataFrame(columns=["id", "건물명", "호실", "날짜", "내역", "지출금액(원)"])
+        return pd.DataFrame(columns=["id", "building_name", "room_number", "expense_date", "description", "amount"])
     df = pd.DataFrame(data)
-    if 'room_number' not in df.columns:
-        df['room_number'] = ""
-        
+    
+    # 필수 컬럼 안전 장치
+    for col in ["building_name", "room_number", "expense_date", "description", "amount"]:
+        if col not in df.columns:
+            df[col] = ""
+            
     rename_map = {
         "building_name": "건물명",
         "room_number": "호실",
@@ -57,8 +60,7 @@ def load_expenses():
         "description": "내역",
         "amount": "지출금액(원)"
     }
-    df = df.rename(columns=rename_map)
-    return df
+    return df.rename(columns=rename_map)
 
 def load_history():
     res = supabase.table("history").select("*").execute()
@@ -296,36 +298,45 @@ with tab2:
         desired_cols = ["건물명", "호실", "날짜", "내역", "지출금액(원)"]
         valid_cols = [c for c in desired_cols if c in display_expenses.columns]
         
-        # 개별 수정 및 삭제 인터페이스 (각 행별 아코디언 혹은 선택 수정)
+        # 개별 수정 및 삭제 인터페이스
+        res_raw = supabase.table("expenses").select("*").execute()
+        raw_list = res_raw.data if res_raw.data else []
+        
         for idx, row in display_expenses.iterrows():
-            row_id = expenses_df.loc[idx].get('id') if 'id' in expenses_df.columns else idx
+            # 원본 Supabase 데이터와 안전하게 매칭하기 위해 index 활용
+            raw_item = raw_list[idx] if idx < len(raw_list) else {}
+            row_id = raw_item.get('id')
+            
             with st.expander(f"🏢 {row.get('건물명', '')} {row.get('호실', '')} | 📅 {row.get('날짜', '')} | 📝 {row.get('내역', '')} ({row.get('지출금액(원)', '')}원)"):
-                with st.form(f"edit_expense_{row_id}_{idx}"):
-                    ed_bname = st.text_input("건물명", value=str(row.get('건물명', '')))
-                    ed_rname = st.text_input("호실", value=str(row.get('호실', '')))
-                    ed_date = st.text_input("날짜", value=str(row.get('날짜', '')))
-                    ed_desc = st.text_input("내역", value=str(row.get('내역', '')))
-                    ed_amount = st.text_input("지출금액(원)", value=str(row.get('지출금액(원)', '')))
-                    
-                    col_b1, col_b2 = st.columns(2)
-                    up_exp = col_b1.form_submit_button("지출 수정 반영", type="primary")
-                    del_exp = col_b2.form_submit_button("지출 내역 삭제")
-                    
-                    if up_exp:
-                        supabase.table("expenses").update({
-                            "building_name": ed_bname,
-                            "room_number": ed_rname,
-                            "expense_date": ed_date,
-                            "description": ed_desc,
-                            "amount": ed_amount
-                        }).eq("id", row_id).execute()
-                        st.success("지출 내역이 수정되었습니다!")
-                        st.rerun()
+                if row_id is not None:
+                    with st.form(f"edit_expense_{row_id}"):
+                        ed_bname = st.text_input("건물명", value=str(row.get('건물명', '')))
+                        ed_rname = st.text_input("호실", value=str(row.get('호실', '')))
+                        ed_date = st.text_input("날짜", value=str(row.get('날짜', '')))
+                        ed_desc = st.text_input("내역", value=str(row.get('내역', '')))
+                        ed_amount = st.text_input("지출금액(원)", value=str(row.get('지출금액(원)', '')))
                         
-                    if del_exp:
-                        supabase.table("expenses").delete().eq("id", row_id).execute()
-                        st.warning("지출 내역이 삭제되었습니다.")
-                        st.rerun()
+                        col_b1, col_b2 = st.columns(2)
+                        up_exp = col_b1.form_submit_button("지출 수정 반영", type="primary")
+                        del_exp = col_b2.form_submit_button("지출 내역 삭제")
+                        
+                        if up_exp:
+                            supabase.table("expenses").update({
+                                "building_name": ed_bname,
+                                "room_number": ed_rname,
+                                "expense_date": ed_date,
+                                "description": ed_desc,
+                                "amount": ed_amount
+                            }).eq("id", row_id).execute()
+                            st.success("지출 내역이 수정되었습니다!")
+                            st.rerun()
+                            
+                        if del_exp:
+                            supabase.table("expenses").delete().eq("id", row_id).execute()
+                            st.warning("지출 내역이 삭제되었습니다.")
+                            st.rerun()
+                else:
+                    st.warning("이 항목은 고유 ID가 없어 수정할 수 없습니다.")
         
         st.markdown("---")
         st.markdown("##### 📋 전체 지출 장부 요약표")
