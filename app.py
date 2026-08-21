@@ -56,8 +56,16 @@ def load_expenses():
         return pd.DataFrame(columns=["id", "날짜", "건물명", "카테고리", "내용", "금액"])
     df = pd.DataFrame(data)
     
-    # Supabase 실제 한글 컬럼 구조와 DataFrame 표준 명칭 동기화
-    # 보유 컬럼 확인 후 유연하게 처리
+    # DB 영문 컬럼을 화면 표시용 한글로 매핑
+    rename_map = {
+        "expense_date": "날짜",
+        "building_name": "건물명",
+        "category": "카테고리",
+        "description": "내용",
+        "amount": "금액"
+    }
+    df = df.rename(columns=rename_map)
+    
     expected_cols = ["id", "날짜", "건물명", "카테고리", "내용", "금액"]
     for col in expected_cols:
         if col not in df.columns:
@@ -327,11 +335,11 @@ with tab2:
                         
                         if up_exp:
                             supabase.table("expenses").update({
-                                "날짜": ed_date,
-                                "건물명": ed_bname,
-                                "카테고리": ed_cat,
-                                "내용": ed_desc,
-                                "금액": ed_amount
+                                "expense_date": ed_date,
+                                "building_name": ed_bname,
+                                "category": ed_cat,
+                                "description": ed_desc,
+                                "amount": ed_amount
                             }).eq("id", row_id).execute()
                             st.success("지출 내역이 수정되었습니다!")
                             st.rerun()
@@ -366,13 +374,12 @@ with tab2:
             if not ex_bname or not ex_desc:
                 st.warning("건물명과 내용은 필수 입력입니다!")
             else:
-                # Supabase의 실제 한글 컬럼명과 정확히 일치시키는 페이로드
                 insert_data = {
-                    "날짜": str(ex_date),
-                    "건물명": ex_bname,
-                    "카테고리": ex_cat,
-                    "내용": ex_desc,
-                    "금액": ex_amount
+                    "expense_date": str(ex_date),
+                    "building_name": ex_bname,
+                    "category": ex_cat,
+                    "description": ex_desc,
+                    "amount": ex_amount
                 }
                 supabase.table("expenses").insert(insert_data).execute()
                 st.success("지출 장부가 클라우드에 안전하게 저장되었습니다!")
