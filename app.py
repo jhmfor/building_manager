@@ -25,10 +25,19 @@ def load_contracts():
         return pd.DataFrame(columns=["id", "건물명", "호실", "임차인", "임차인연락처", "부동산명", "부동산연락처", "보증금(원)", "월세(원)", "납부일", "계약일", "만료일", "특약사항", "상태"])
     df = pd.DataFrame(data)
     rename_map = {
-        "building_name": "건물명", "room_number": "호실", "tenant_name": "임차인",
-        "tenant_phone": "임차인연락처", "agency_name": "부동산명", "agency_phone": "부동산연락처",
-        "deposit_amount": "보증금(원)", "monthly_rent": "월세(원)", "pay_day": "납부일",
-        "start_date": "계약일", "end_date": "만료일", "special_notes": "특약사항", "status": "상태"
+        "building_name": "건물명",
+        "room_number": "호실",
+        "tenant_name": "임차인",
+        "tenant_phone": "임차인연락처",
+        "agency_name": "부동산명",
+        "agency_phone": "부동산연락처",
+        "deposit_amount": "보증금(원)",
+        "monthly_rent": "월세(원)",
+        "pay_day": "납부일",
+        "start_date": "계약일",
+        "end_date": "만료일",
+        "special_notes": "특약사항",
+        "status": "상태"
     }
     return df.rename(columns=rename_map)
 
@@ -38,7 +47,6 @@ def load_expenses():
     if not data:
         return pd.DataFrame(columns=["id", "건물명", "호실", "날짜", "내역", "지출금액(원)"])
     df = pd.DataFrame(data)
-    # Supabase 테이블 구조에 'room_number'가 없을 경우를 대비한 안전 장치
     if 'room_number' not in df.columns:
         df['room_number'] = ""
         
@@ -50,13 +58,6 @@ def load_expenses():
         "amount": "지출금액(원)"
     }
     df = df.rename(columns=rename_map)
-    
-    # 요청하신 항목 순서 정렬 (건물명, 호실, 날짜, 내역, 비용)
-    desired_cols = ["건물명", "호실", "날짜", "내역", "지출금액(원)"]
-    for col in desired_cols:
-        if col not in df.columns:
-            df[col] = ""
-            
     return df
 
 def load_history():
@@ -68,8 +69,13 @@ def load_history():
     if 'id' in df.columns:
         df = df.drop(columns=['id'])
     rename_map = {
-        "building_name": "건물명", "room_number": "호실", "contract_period": "계약기간",
-        "deposit": "보증금", "rent": "월세", "purchase_price": "매수가(원)", "sale_price": "매도가(원)"
+        "building_name": "건물명",
+        "room_number": "호실",
+        "contract_period": "계약기간",
+        "deposit": "보증금",
+        "rent": "월세",
+        "purchase_price": "매수가(원)",
+        "sale_price": "매도가(원)"
     }
     return df.rename(columns=rename_map)
 
@@ -81,50 +87,188 @@ tab1, tab2, tab3 = st.tabs(["📋 임대 계약 및 관리", "💰 지출 및 �
 
 with tab1:
     st.subheader("현재 임대 계약 현황 및 관리")
-    # (탭 1 내용은 기존과 동일하게 유지)
+    
     if len(contracts_df) > 0:
         for idx, row in contracts_df.iterrows():
             row_id = row.get('id')
             with st.container(border=True):
-                st.markdown(f"### 🏢 {row.get('건물명', '')} {row.get('호실', '')}")
-                st.markdown(f"🗓️ **계약 기간**: {row.get('계약일', '')} ~ {row.get('만료일', '')}")
+                col_t1, col_t2 = st.columns([2, 1])
+                with col_t1:
+                    st.markdown(f"### 🏢 {row.get('건물명', '')} {row.get('호실', '')}")
+                with col_t2:
+                    status_badge = row.get('상태', '계약중')
+                    if status_badge == "계약중":
+                        st.markdown(f"🟢 **{status_badge}**")
+                    elif status_badge == "만료임박":
+                        st.markdown(f"🟠 **⚠️ {status_badge}**")
+                    else:
+                        st.markdown(f"🔴 **{status_badge}**")
+                
+                deposit_val = row.get('보증금(원)', '0')
+                rent_val = row.get('월세(원)', '0')
+                pay_day = row.get('납부일', '25일')
+                
+                st.markdown(f"💰 **보증금**: {deposit_val}원 &nbsp;|&nbsp; 💵 **월세**: {rent_val}원 (매월 **{pay_day}**) 통보")
+                
+                t_name = row.get('임차인', '')
+                t_phone = row.get('임차인연락처', '')
+                r_name = row.get('부동산명', '')
+                r_phone = row.get('부동산연락처', '')
+                
+                combined_info = f"👤 **임차인**: {t_name} ([전화](tel:{t_phone}) | [문자](sms:{t_phone})) &nbsp;/&nbsp; 🏠 **부동산**: {r_name} ([전화](tel:{r_phone}) | [문자](sms:{r_phone}))"
+                st.markdown(combined_info)
+                
+                start_d = row.get('계약일', '')
+                end_d = row.get('만료일', '')
+                st.markdown(
+                    f"""
+                    <div style="background-color: #f0f2f6; padding: 10px; border-radius: 8px; margin-top: 5px; margin-bottom: 5px;">
+                        🗓️ <b>계약 기간</b> : <span style="color: #1f77b4; font-weight: bold;">{start_d} ~ {end_d}</span>
+                    </div>
+                    """, 
+                    unsafe_allow_html=True
+                )
+                
+                special_note = row.get('특약사항', '')
+                if pd.notnull(special_note) and str(special_note).strip() != "":
+                    st.info(f"📝 **특약 사항**: {special_note}")
                 
                 edit_state_key = f"is_editing_{row_id}"
                 if edit_state_key not in st.session_state:
                     st.session_state[edit_state_key] = False
                 
-                if st.button("✏️ 수정/삭제", key=f"toggle_btn_{row_id}"):
-                    st.session_state[edit_state_key] = not st.session_state[edit_state_key]
-                    st.rerun()
+                btn_col1, btn_col2 = st.columns([4, 1])
+                with btn_col2:
+                    if st.button("✏️ 수정/삭제", key=f"toggle_btn_{row_id}"):
+                        st.session_state[edit_state_key] = not st.session_state[edit_state_key]
+                        st.rerun()
                 
                 if st.session_state[edit_state_key]:
-                    with st.form(f"edit_form_{row_id}"):
-                        e_bname = st.text_input("건물명", value=str(row.get('건물명', '')))
-                        e_rname = st.text_input("호실", value=str(row.get('호실', '')))
-                        e_start_date = st.date_input("계약 시작일 수정", value=pd.to_datetime(row.get('계약일')) if pd.notnull(row.get('계약일')) else datetime.today().date())
-                        e_end_date = st.date_input("계약 만료일 수정", value=pd.to_datetime(row.get('만료일')) if pd.notnull(row.get('만료일')) else datetime.today().date())
-                        
-                        update_btn = st.form_submit_button("수정 반영", type="primary")
-                        delete_btn = st.form_submit_button("계약 삭제")
-                        
-                        if update_btn:
-                            supabase.table("contracts").update({
-                                "building_name": e_bname, "room_number": e_rname,
-                                "start_date": str(e_start_date), "end_date": str(e_end_date)
-                            }).eq("id", row_id).execute()
-                            st.session_state[edit_state_key] = False
-                            st.rerun()
-                        if delete_btn:
-                            supabase.table("contracts").delete().eq("id", row_id).execute()
-                            st.session_state[edit_state_key] = False
-                            st.rerun()
+                    with st.container(border=True):
+                        st.markdown(f"#### 🛠️ 클라우드 데이터 수정")
+                        with st.form(f"edit_form_{row_id}"):
+                            e_bname = st.text_input("건물명", value=str(row.get('건물명', '')))
+                            e_rname = st.text_input("호실", value=str(row.get('호실', '')))
+                            e_tname = st.text_input("임차인 이름", value=str(row.get('임차인', '')))
+                            e_tphone = st.text_input("임차인 연락처", value=str(row.get('임차인연락처', '')))
+                            e_rename = st.text_input("부동산 이름", value=str(row.get('부동산명', '')))
+                            e_rephone = st.text_input("부동산 연락처", value=str(row.get('부동산연락처', '')))
+                            
+                            e_deposit = st.text_input("보증금", value=str(row.get('보증금(원)', '')))
+                            e_rent = st.text_input("월세", value=str(row.get('월세(원)', '')))
+                            e_pay_day = st.text_input("월세 납부일", value=str(row.get('납부일', '')))
+                            
+                            try:
+                                default_start = pd.to_datetime(start_d).date() if pd.notnull(start_d) and start_d != "" else datetime.today().date()
+                            except:
+                                default_start = datetime.today().date()
+                                
+                            try:
+                                default_end = pd.to_datetime(end_d).date() if pd.notnull(end_d) and end_d != "" else datetime.today().date()
+                            except:
+                                default_end = datetime.today().date()
+
+                            e_start_date = st.date_input("계약 시작일 수정", value=default_start)
+                            e_end_date = st.date_input("계약 만료일 수정", value=default_end)
+                            
+                            update_btn = st.form_submit_button("클라우드에 수정 반영", type="primary")
+                            delete_btn = st.form_submit_button("클라우드에서 계약 삭제")
+                            
+                            if update_btn:
+                                supabase.table("contracts").update({
+                                    "building_name": e_bname,
+                                    "room_number": e_rname,
+                                    "tenant_name": e_tname,
+                                    "tenant_phone": e_tphone,
+                                    "agency_name": e_rename,
+                                    "agency_phone": e_rephone,
+                                    "deposit_amount": e_deposit,
+                                    "monthly_rent": e_rent,
+                                    "pay_day": e_pay_day,
+                                    "start_date": str(e_start_date),
+                                    "end_date": str(e_end_date)
+                                }).eq("id", row_id).execute()
+                                st.session_state[edit_state_key] = False
+                                st.success("클라우드 서버에 수정 사항이 반영되었습니다!")
+                                st.rerun()
+                                
+                            if delete_btn:
+                                supabase.table("contracts").delete().eq("id", row_id).execute()
+                                st.session_state[edit_state_key] = False
+                                st.warning("클라우드 서버에서 계약이 삭제되었습니다.")
+                                st.rerun()
     else:
-        st.info("등록된 계약 정보가 없습니다.")
+        st.info("클라우드에 등록된 계약 정보가 없습니다.")
+    
+    st.markdown("---")
+    st.markdown("#### ➕ 새로운 계약 등록 (클라우드 저장)")
+    
+    with st.form("contract_form_cloud", clear_on_submit=True):
+        col1, col2 = st.columns(2)
+        b_name = col1.text_input("건물명", placeholder="예: 부산 센토빌")
+        r_name = col2.text_input("호실", placeholder="예: 302호")
+        
+        col3, col4 = st.columns(2)
+        t_name = col3.text_input("임차인 이름", placeholder="예: 김세은")
+        t_phone = col4.text_input("임차인 연락처", placeholder="예: 010-1234-5678")
+        
+        col5, col6 = st.columns(2)
+        re_name = col5.text_input("부동산 이름", placeholder="예: 친절공인중개사")
+        re_phone = col6.text_input("부동산 연락처", placeholder="예: 051-123-4567")
+        
+        r_col1, r_col2, r_col3 = st.columns(3)
+        deposit_val_input = r_col1.text_input("보증금", value="10,000,000")
+        rent_val_input = r_col2.text_input("월세", value="500,000")
+        pay_day_input = r_col3.text_input("월세 납부일", value="25일")
+        
+        d_col1, d_col2 = st.columns(2)
+        start_date = d_col1.date_input("계약 시작일")
+        end_date = d_col2.date_input("계약 만료일", value=pd.to_datetime(start_date) + pd.DateOffset(years=2))
+        
+        special_input = st.text_area("특약 사항 (선택 입력)")
+        
+        submitted = st.form_submit_button("신규 계약 클라우드 저장", type="primary")
+        
+        if submitted:
+            if not b_name or not r_name or not t_name or not t_phone:
+                st.warning("필수 항목을 모두 입력해주세요!")
+            else:
+                start_str = start_date.strftime("%Y-%m-%d")
+                end_str = end_date.strftime("%Y-%m-%d")
+                
+                supabase.table("contracts").insert({
+                    "building_name": b_name,
+                    "room_number": r_name,
+                    "tenant_name": t_name,
+                    "tenant_phone": t_phone,
+                    "agency_name": re_name,
+                    "agency_phone": re_phone,
+                    "deposit_amount": deposit_val_input,
+                    "monthly_rent": rent_val_input,
+                    "pay_day": pay_day_input,
+                    "start_date": start_str,
+                    "end_date": end_str,
+                    "special_notes": special_input,
+                    "status": "계약중"
+                }).execute()
+                
+                supabase.table("history").insert({
+                    "building_name": b_name,
+                    "room_number": r_name,
+                    "contract_period": f"{start_str} ~ {end_str}",
+                    "deposit": deposit_val_input,
+                    "rent": rent_val_input,
+                    "purchase_price": "0",
+                    "sale_price": "0"
+                }).execute()
+                
+                st.success("클라우드 서버에 안전하게 저장되었습니다!")
+                st.rerun()
 
 with tab2:
     st.subheader("💰 건물 유지보수 및 지출 장부")
     
-    # 검색 기능
+    # 1. 검색 기능 추가
     exp_search = st.text_input("🔍 지출 내역 검색", placeholder="건물명, 호실 또는 내역을 입력하세요", key="exp_search_input")
     
     display_expenses = expenses_df.copy()
@@ -132,14 +276,12 @@ with tab2:
         mask = display_expenses.apply(lambda row: row.astype(str).str.contains(exp_search, case=False).any(), axis=1)
         display_expenses = display_expenses[mask]
     
-    # 비용 합산 기능 (숫자형 변환 후 합산)
+    # 2. 비용 합산 기능
     total_cost = 0
     if not display_expenses.empty and "지출금액(원)" in display_expenses.columns:
-        # 콤마 제거 후 숫자로 변환하여 합산
         numeric_costs = display_expenses["지출금액(원)"].astype(str).str.replace(r'[^\d]', '', regex=True)
         total_cost = pd.to_numeric(numeric_costs, errors='coerce').sum()
     
-    # 합산 결과 강조 표시
     st.markdown(
         f"""
         <div style="background-color: #e8f4f8; padding: 15px; border-radius: 10px; margin-bottom: 15px; border-left: 5px solid #1f77b4;">
@@ -149,10 +291,45 @@ with tab2:
         unsafe_allow_html=True
     )
     
-    # id 컬럼 제외하고 원하는 순서(건물명, 호실, 날짜, 내역, 비용)로 테이블 출력
+    # 3. id 제거 및 항목 순서 정렬: 건물명, 호실, 날짜, 내역, 지출금액(원)
     if not display_expenses.empty:
-        cols_to_show = [c for c in ["건물명", "호실", "날짜", "내역", "지출금액(원)"] if c in display_expenses.columns]
-        st.dataframe(display_expenses[cols_to_show], use_container_width=True, hide_index=True)
+        desired_cols = ["건물명", "호실", "날짜", "내역", "지출금액(원)"]
+        valid_cols = [c for c in desired_cols if c in display_expenses.columns]
+        
+        # 개별 수정 및 삭제 인터페이스 (각 행별 아코디언 혹은 선택 수정)
+        for idx, row in display_expenses.iterrows():
+            row_id = expenses_df.loc[idx].get('id') if 'id' in expenses_df.columns else idx
+            with st.expander(f"🏢 {row.get('건물명', '')} {row.get('호실', '')} | 📅 {row.get('날짜', '')} | 📝 {row.get('내역', '')} ({row.get('지출금액(원)', '')}원)"):
+                with st.form(f"edit_expense_{row_id}_{idx}"):
+                    ed_bname = st.text_input("건물명", value=str(row.get('건물명', '')))
+                    ed_rname = st.text_input("호실", value=str(row.get('호실', '')))
+                    ed_date = st.text_input("날짜", value=str(row.get('날짜', '')))
+                    ed_desc = st.text_input("내역", value=str(row.get('내역', '')))
+                    ed_amount = st.text_input("지출금액(원)", value=str(row.get('지출금액(원)', '')))
+                    
+                    col_b1, col_b2 = st.columns(2)
+                    up_exp = col_b1.form_submit_button("지출 수정 반영", type="primary")
+                    del_exp = col_b2.form_submit_button("지출 내역 삭제")
+                    
+                    if up_exp:
+                        supabase.table("expenses").update({
+                            "building_name": ed_bname,
+                            "room_number": ed_rname,
+                            "expense_date": ed_date,
+                            "description": ed_desc,
+                            "amount": ed_amount
+                        }).eq("id", row_id).execute()
+                        st.success("지출 내역이 수정되었습니다!")
+                        st.rerun()
+                        
+                    if del_exp:
+                        supabase.table("expenses").delete().eq("id", row_id).execute()
+                        st.warning("지출 내역이 삭제되었습니다.")
+                        st.rerun()
+        
+        st.markdown("---")
+        st.markdown("##### 📋 전체 지출 장부 요약표")
+        st.dataframe(display_expenses[valid_cols], use_container_width=True, hide_index=True)
     else:
         st.info("조건에 맞는 지출 내역이 없습니다.")
         
