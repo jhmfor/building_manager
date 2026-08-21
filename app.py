@@ -56,11 +56,10 @@ def load_expenses():
     
     df = pd.DataFrame(data)
     
-    # DB 컬럼(building_name, category/room_number, expense_date, description, amount)을 한글로 매핑
+    # DB 컬럼을 화면 표시용 한글 순서(건물명, 호실, 날짜, 내역, 비용)로 매핑
     rename_map = {
         "building_name": "건물명",
-        "room_number": "호실",
-        "category": "호실",  # room_number가 없을 경우 category를 호실 자리로 대체 활용
+        "category": "호실",      # DB의 category 컬럼을 화면의 '호실' 위치에 매핑
         "expense_date": "날짜",
         "description": "내역",
         "amount": "비용"
@@ -206,18 +205,14 @@ with tab2:
                         del_exp = col_b2.form_submit_button("지출 내역 삭제")
                         
                         if up_exp:
-                            # DB에 맞게 category나 room_number 중 존재하는 필드로 안전하게 업데이트
+                            # 현재 Supabase 테이블 구조(building_name, category, expense_date, description, amount)에 정확히 맞춤
                             update_dict = {
                                 "building_name": ed_bname,
+                                "category": ed_rname,
                                 "expense_date": ed_date,
                                 "description": ed_desc,
                                 "amount": ed_amount
                             }
-                            if "room_number" in res_raw.data[0]:
-                                update_dict["room_number"] = ed_rname
-                            else:
-                                update_dict["category"] = ed_rname
-                                
                             supabase.table("expenses").update(update_dict).eq("id", row_id).execute()
                             st.success("수정되었습니다!")
                             st.rerun()
@@ -252,9 +247,10 @@ with tab2:
             if not ex_bname or not ex_desc:
                 st.warning("건물명과 내용은 필수 입력입니다!")
             else:
+                # 에러 원인이었던 누락 컬럼 문제를 해결하기 위해 실제 DB 컬럼명으로 정확히 전송
                 insert_data = {
                     "building_name": ex_bname,
-                    "category": ex_rname,  # 현재 테이블의 category 컬럼을 호실 데이터 저장용으로 사용
+                    "category": ex_rname,
                     "expense_date": str(ex_date),
                     "description": ex_desc,
                     "amount": ex_amount
