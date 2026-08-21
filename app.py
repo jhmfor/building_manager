@@ -47,14 +47,14 @@ def load_expenses():
     res = supabase.table("expenses").select("*").execute()
     data = res.data
     if not data:
-        return pd.DataFrame(columns=["id", "날짜", "건물명", "카테고리", "내역", "지출금액(원)"])
+        return pd.DataFrame(columns=["날짜", "건물명", "카테고리", "내역", "지출금액(원)"])
     return pd.DataFrame(data)
 
 def load_history():
     res = supabase.table("history").select("*").execute()
     data = res.data
     if not data:
-        return pd.DataFrame(columns=["id", "건물명", "호실", "계약기간", "보증금", "월세", "매수가(원)", "매도가(원)"])
+        return pd.DataFrame(columns=["건물명", "호실", "계약기간", "보증금", "월세", "매수가(원)", "매도가(원)"])
     df = pd.DataFrame(data)
     rename_map = {
         "building_name": "건물명",
@@ -98,7 +98,7 @@ with tab1:
                 rent_val = row.get('월세(원)', '0')
                 pay_day = row.get('납부일', '25일')
                 
-                st.markdown(f"💰 **보증금**: {deposit_val}원 &nbsp;|&nbsp; 💵 **월세**: {rent_val}원 (매월 **{pay_day}**) 통보")
+                st.markdown(f"💰 **보증금**: {deposit_val}원 &nbsp;|&nbsp; 💵 **월세**: {rent_val}원 (매월 **{pay_day}**)")
                 
                 t_name = row.get('임차인', '')
                 t_phone = row.get('임차인연락처', '')
