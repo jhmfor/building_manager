@@ -45,14 +45,13 @@ def load_expenses():
     res = supabase.table("expenses").select("*").execute()
     data = res.data
     if not data:
-        return pd.DataFrame(columns=["id", "building_name", "room_number", "expense_date", "description", "amount"])
+        return pd.DataFrame(columns=["id", "building_name", "expense_date", "description", "amount"])
     df = pd.DataFrame(data)
     
-    # 필수 컬럼 안전 장치
-    for col in ["building_name", "room_number", "expense_date", "description", "amount"]:
-        if col not in df.columns:
-            df[col] = ""
-            
+    # Supabase 스키마에 맞게 컬럼 매핑 (호실 컬럼이 없을 경우 빈 값 처리)
+    if 'room_number' not in df.columns:
+        df['room_number'] = ""
+        
     rename_map = {
         "building_name": "건물명",
         "room_number": "호실",
@@ -298,18 +297,17 @@ with tab2:
         desired_cols = ["건물명", "호실", "날짜", "내역", "지출금액(원)"]
         valid_cols = [c for c in desired_cols if c in display_expenses.columns]
         
-        # 개별 수정 및 삭제 인터페이스
+        # 원본 데이터 안전 매칭
         res_raw = supabase.table("expenses").select("*").execute()
         raw_list = res_raw.data if res_raw.data else []
         
         for idx, row in display_expenses.iterrows():
-            # 원본 Supabase 데이터와 안전하게 매칭하기 위해 index 활용
             raw_item = raw_list[idx] if idx < len(raw_list) else {}
             row_id = raw_item.get('id')
             
             with st.expander(f"🏢 {row.get('건물명', '')} {row.get('호실', '')} | 📅 {row.get('날짜', '')} | 📝 {row.get('내역', '')} ({row.get('지출금액(원)', '')}원)"):
                 if row_id is not None:
-                    with st.form(f"edit_expense_{row_id}"):
+                    with st.form(f"edit_expense_{row_id}_{idx}"):
                         ed_bname = st.text_input("건물명", value=str(row.get('건물명', '')))
                         ed_rname = st.text_input("호실", value=str(row.get('호실', '')))
                         ed_date = st.text_input("날짜", value=str(row.get('날짜', '')))
@@ -321,13 +319,18 @@ with tab2:
                         del_exp = col_b2.form_submit_button("지출 내역 삭제")
                         
                         if up_exp:
-                            supabase.table("expenses").update({
+                            update_data = {
                                 "building_name": ed_bname,
-                                "room_number": ed_rname,
                                 "expense_date": ed_date,
                                 "description": ed_desc,
                                 "amount": ed_amount
-                            }).eq("id", row_id).execute()
+                            }
+                            # DB에 room_number 컬럼이 있을 경우에만 포함
+                            try:
+                                supabase.table("expenses").update({**update_data, "room_number": ed_rname}).eq("id", row_id).execute()
+                            except:
+                                supabase.table("expenses").update(update_data).eq("id", row_id).execute()
+                                
                             st.success("지출 내역이 수정되었습니다!")
                             st.rerun()
                             
@@ -362,13 +365,18 @@ with tab2:
             if not ex_bname or not ex_desc:
                 st.warning("건물명과 내역은 필수 입력입니다!")
             else:
-                supabase.table("expenses").insert({
+                insert_data = {
                     "building_name": ex_bname,
-                    "room_number": ex_rname,
                     "expense_date": str(ex_date),
                     "description": ex_desc,
                     "amount": ex_amount
-                }).execute()
+                }
+                # 호실 컬럼 에러 방지를 위한 안전 분기 처리
+                try:
+                    supabase.table("expenses").insert({**insert_data, "room_number": ex_rname}).execute()
+                except:
+                    supabase.table("expenses").insert(insert_data).execute()
+                    
                 st.success("지출 장부가 클라우드에 저장되었습니다!")
                 st.rerun()
 
