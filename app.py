@@ -100,7 +100,7 @@ with tab1:
                 rent_val = row.get('월세(원)', '0')
                 pay_day = row.get('납부일', '25일')
                 
-                st.markdown(f"💰 **보증금**: {deposit_val}원 &nbsp;|&nbsp; 💵 **월세**: {rent_val}원 (매월 **{pay_day}**) 통보")
+                st.markdown(f"💰 **보증금**: {deposit_val}원 &nbsp;|&nbsp; 💵 **월세**: {rent_val}원 (매월 **{pay_day}**)")
                 
                 t_name = row.get('임차인', '')
                 t_phone = row.get('임차인연락처', '')
