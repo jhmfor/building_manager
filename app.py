@@ -56,7 +56,7 @@ def load_expenses():
     
     df = pd.DataFrame(data)
     
-    # DB 영문 컬럼을 화면 표시용 한글 순서(건물명, 호실, 날짜, 내역, 비용)로 매핑
+    # DB 영문 컬럼을 화면 표시용 한글 순서로 매핑
     rename_map = {
         "building_name": "건물명",
         "room_number": "호실",
@@ -66,6 +66,7 @@ def load_expenses():
     }
     df = df.rename(columns=rename_map)
     
+    # 필수 컬럼이 빠져있어도 KeyError가 나지 않도록 자동 보정
     expected_cols = ["id", "건물명", "호실", "날짜", "내역", "비용"]
     for col in expected_cols:
         if col not in df.columns:
@@ -157,7 +158,7 @@ with tab1:
 with tab2:
     st.subheader("💰 건물 유지보수 및 지출 장부")
     
-    # 🔍 검색 기능 추가
+    # 🔍 검색 기능
     exp_search = st.text_input("🔍 지출 내역 검색", placeholder="건물명, 호실 또는 내역을 입력하세요", key="exp_search_input")
     
     display_expenses = expenses_df.copy()
@@ -165,7 +166,7 @@ with tab2:
         mask = display_expenses.apply(lambda row: row.astype(str).str.contains(exp_search, case=False).any(), axis=1)
         display_expenses = display_expenses[mask]
     
-    # 💵 비용 합산 기능 추가
+    # 💵 비용 합산 기능
     total_cost = 0
     if not display_expenses.empty and "비용" in display_expenses.columns:
         numeric_costs = display_expenses["비용"].astype(str).str.replace(r'[^\d]', '', regex=True)
@@ -180,7 +181,6 @@ with tab2:
         unsafe_allow_html=True
     )
     
-    # 지출 내역 목록 표시 및 수정/삭제
     if not display_expenses.empty:
         try:
             res_raw = supabase.table("expenses").select("*").execute()
@@ -223,7 +223,10 @@ with tab2:
         
         st.markdown("---")
         st.markdown("##### 📋 지출 장부 요약표 (건물명, 호실, 날짜, 내역, 비용 순)")
-        st.dataframe(display_expenses[["건물명", "호실", "날짜", "내용", "비용"]], use_container_width=True, hide_index=True)
+        
+        # 존재하는 컬럼만 안전하게 필터링하여 출력
+        safe_cols = [c for c in ["건물명", "호실", "날짜", "내용", "비용"] if c in display_expenses.columns]
+        st.dataframe(display_expenses[safe_cols], use_container_width=True, hide_index=True)
     else:
         st.info("조건에 맞는 지출 내역이 없습니다.")
         
