@@ -56,17 +56,16 @@ def load_expenses():
     
     df = pd.DataFrame(data)
     
-    # DB 영문 컬럼을 화면 표시용 한글 순서로 매핑
-    rename_map = {
-        "building_name": "건물명",
-        "room_number": "호실",
-        "expense_date": "날짜",
-        "description": "내역",
-        "amount": "비용"
-    }
+    # DB 컬럼명을 화면 표시용 한글 순서로 매핑 (없는 컬럼은 유연하게 대처)
+    rename_map = {}
+    if "building_name" in df.columns: rename_map["building_name"] = "건물명"
+    if "room_number" in df.columns: rename_map["room_number"] = "호실"
+    if "expense_date" in df.columns: rename_map["expense_date"] = "날짜"
+    if "description" in df.columns: rename_map["description"] = "내역"
+    if "amount" in df.columns: rename_map["amount"] = "비용"
+    
     df = df.rename(columns=rename_map)
     
-    # 필수 컬럼이 빠져있어도 KeyError가 나지 않도록 자동 보정
     expected_cols = ["id", "건물명", "호실", "날짜", "내역", "비용"]
     for col in expected_cols:
         if col not in df.columns:
@@ -224,7 +223,6 @@ with tab2:
         st.markdown("---")
         st.markdown("##### 📋 지출 장부 요약표 (건물명, 호실, 날짜, 내역, 비용 순)")
         
-        # 존재하는 컬럼만 안전하게 필터링하여 출력
         safe_cols = [c for c in ["건물명", "호실", "날짜", "내용", "비용"] if c in display_expenses.columns]
         st.dataframe(display_expenses[safe_cols], use_container_width=True, hide_index=True)
     else:
@@ -247,6 +245,7 @@ with tab2:
             if not ex_bname or not ex_desc:
                 st.warning("건물명과 내용은 필수 입력입니다!")
             else:
+                # 에러 방지를 위해 기본 컬럼들만 안전하게 전송
                 insert_data = {
                     "building_name": ex_bname,
                     "room_number": ex_rname,
