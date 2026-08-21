@@ -181,59 +181,10 @@ with tab2:
         unsafe_allow_html=True
     )
     
+    # 중복 출력되던 아코디언(expander) 반복문 영역을 완전히 삭제했습니다!
+    
     if not display_expenses.empty:
-        try:
-            res_raw = supabase.table("expenses").select("*").execute()
-            raw_list = res_raw.data if res_raw.data else []
-        except:
-            raw_list = []
-        
-        for idx, row in display_expenses.iterrows():
-            raw_item = raw_list[idx] if idx < len(raw_list) else {}
-            row_id = raw_item.get('id')
-            
-            with st.expander(f"🏢 {row.get('건물명', '')} ({row.get('호실', '')}) | 📅 {row.get('날짜', '')} | 📝 {row.get('내용', '')} ({row.get('비용', '')}원)"):
-                if row_id is not None:
-                    with st.form(f"edit_expense_{row_id}_{idx}"):
-                        ed_bname = st.text_input("건물명", value=str(row.get('건물명', '')))
-                        ed_rname = st.text_input("호실", value=str(row.get('호실', '')))
-                        ed_date = st.text_input("날짜", value=str(row.get('날짜', '')))
-                        ed_desc = st.text_input("내용", value=str(row.get('내용', '')))
-                        ed_amount = st.text_input("비용", value=str(row.get('비용', '')))
-                        
-                        col_b1, col_b2 = st.columns(2)
-                        up_exp = col_b1.form_submit_button("지출 수정 반영", type="primary")
-                        del_exp = col_b2.form_submit_button("지출 내역 삭제")
-                        
-                        if up_exp:
-                            clean_amount = "".join(filter(str.isdigit, str(ed_amount)))
-                            # 현재 DB 테이블에 존재하는 컬럼 상태를 동적으로 확인하여 반영
-                            sample_row = raw_list[0] if raw_list else {}
-                            update_dict = {
-                                "building_name": ed_bname,
-                                "expense_date": ed_date,
-                                "description": ed_desc,
-                                "amount": clean_amount
-                            }
-                            if "room_number" in sample_row:
-                                update_dict["room_number"] = ed_rname
-                            elif "category" in sample_row:
-                                update_dict["category"] = ed_rname
-                            else:
-                                update_dict["category"] = ed_rname # 기본값
-                                
-                            supabase.table("expenses").update(update_dict).eq("id", row_id).execute()
-                            st.success("수정되었습니다!")
-                            st.rerun()
-                            
-                        if del_exp:
-                            supabase.table("expenses").delete().eq("id", row_id).execute()
-                            st.warning("삭제되었습니다.")
-                            st.rerun()
-        
-        st.markdown("---")
         st.markdown("##### 📋 지출 장부 요약표 (건물명, 호실, 날짜, 내역, 비용 순)")
-        
         safe_cols = [c for c in ["건물명", "호실", "날짜", "내역", "비용"] if c in display_expenses.columns]
         st.dataframe(display_expenses[safe_cols], use_container_width=True, hide_index=True)
     else:
@@ -258,7 +209,6 @@ with tab2:
             else:
                 clean_amount = "".join(filter(str.isdigit, str(ex_amount)))
                 
-                # DB에 실제로 있는 컬럼명을 동적으로 체크해서 데이터 구성
                 try:
                     test_res = supabase.table("expenses").select("*").limit(1).execute()
                     first_row = test_res.data[0] if test_res.data else {}
@@ -277,7 +227,6 @@ with tab2:
                 elif "category" in first_row:
                     insert_data["category"] = ex_rname
                 else:
-                    # 둘 다 없으면 기본적으로 category에 넣기 시도
                     insert_data["category"] = ex_rname
 
                 supabase.table("expenses").insert(insert_data).execute()
