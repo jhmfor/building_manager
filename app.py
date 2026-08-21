@@ -19,8 +19,12 @@ supabase = init_connection()
 
 # 2. 클라우드에서 데이터 불러오기 함수들
 def load_contracts():
-    res = supabase.table("contracts").select("*").execute()
-    data = res.data
+    try:
+        res = supabase.table("contracts").select("*").execute()
+        data = res.data
+    except:
+        data = []
+        
     if not data:
         return pd.DataFrame(columns=["id", "건물명", "호실", "임차인", "임차인연락처", "부동산명", "부동산연락처", "보증금(원)", "월세(원)", "납부일", "계약일", "만료일", "특약사항", "상태"])
     df = pd.DataFrame(data)
@@ -42,28 +46,40 @@ def load_contracts():
     return df.rename(columns=rename_map)
 
 def load_expenses():
-    res = supabase.table("expenses").select("*").execute()
-    data = res.data
+    try:
+        res = supabase.table("expenses").select("*").execute()
+        data = res.data
+    except:
+        data = []
+        
     if not data:
-        return pd.DataFrame(columns=["id", "building_name", "expense_date", "description", "amount"])
+        return pd.DataFrame(columns=["id", "건물명", "날짜", "내역", "지출금액(원)"])
     df = pd.DataFrame(data)
     
-    # Supabase 스키마 오류 원천 차단 (호실 컬럼이 DB에 없을 경우 생성하지 않고 데이터 오류 방지)
-    if 'room_number' not in df.columns:
-        df['room_number'] = ""
+    # DB 필드명을 한글 표기용으로 유연하게 매핑
+    col_mapping = {}
+    for c in df.columns:
+        if "building" in c.lower(): col_mapping[c] = "건물명"
+        elif "date" in c.lower(): col_mapping[c] = "날짜"
+        elif "desc" in c.lower(): col_mapping[c] = "내역"
+        elif "amount" in c.lower() or "cost" in c.lower() or "price" in c.lower(): col_mapping[c] = "지출금액(원)"
         
-    rename_map = {
-        "building_name": "건물명",
-        "room_number": "호실",
-        "expense_date": "날짜",
-        "description": "내역",
-        "amount": "지출금액(원)"
-    }
-    return df.rename(columns=rename_map)
+    df = df.rename(columns=col_mapping)
+    
+    # 필수 컬럼 보장
+    for req in ["건물명", "날짜", "내역", "지출금액(원)"]:
+        if req not in df.columns:
+            df[req] = ""
+            
+    return df
 
 def load_history():
-    res = supabase.table("history").select("*").execute()
-    data = res.data
+    try:
+        res = supabase.table("history").select("*").execute()
+        data = res.data
+    except:
+        data = []
+        
     if not data:
         return pd.DataFrame(columns=["건물명", "호실", "계약기간", "보증금", "월세", "매수가(원)", "매도가(원)"])
     df = pd.DataFrame(data)
@@ -269,7 +285,6 @@ with tab1:
 with tab2:
     st.subheader("💰 건물 유지보수 및 지출 장부")
     
-    # 1. 검색 기능 추가
     exp_search = st.text_input("🔍 지출 내역 검색", placeholder="건물명 또는 내역을 입력하세요", key="exp_search_input")
     
     display_expenses = expenses_df.copy()
@@ -277,7 +292,6 @@ with tab2:
         mask = display_expenses.apply(lambda row: row.astype(str).str.contains(exp_search, case=False).any(), axis=1)
         display_expenses = display_expenses[mask]
     
-    # 2. 비용 합산 기능
     total_cost = 0
     if not display_expenses.empty and "지출금액(원)" in display_expenses.columns:
         numeric_costs = display_expenses["지출금액(원)"].astype(str).str.replace(r'[^\d]', '', regex=True)
@@ -292,13 +306,15 @@ with tab2:
         unsafe_allow_html=True
     )
     
-    # 3. 데이터 표시 및 관리
     if not display_expenses.empty:
-        desired_cols = ["건물명", "날짜", "내역", "지출금액(원)"]
-        valid_cols = [c for c in desired_cols if c in display_expenses.columns]
+        valid_cols = ["건물명", "날짜", "내역", "지출금액(원)"]
+        valid_cols = [c for c in valid_cols if c in display_expenses.columns]
         
-        res_raw = supabase.table("expenses").select("*").execute()
-        raw_list = res_raw.data if res_raw.data else []
+        try:
+            res_raw = supabase.table("expenses").select("*").execute()
+            raw_list = res_raw.data if res_raw.data else []
+        except:
+            raw_list = []
         
         for idx, row in display_expenses.iterrows():
             raw_item = raw_list[idx] if idx < len(raw_list) else {}
@@ -355,16 +371,27 @@ with tab2:
             if not ex_bname or not ex_desc:
                 st.warning("건물명과 내역은 필수 입력입니다!")
             else:
-                # 오직 Supabase 스키마에 존재하는 컬럼만 명시적으로 전송하여 에러 원천 차단
-                insert_data = {
-                    "building_name": ex_bname,
-                    "expense_date": str(ex_date),
-                    "description": ex_desc,
-                    "amount": ex_amount
-                }
-                supabase.table("expenses").insert(insert_data).execute()
-                st.success("지출 장부가 클라우드에 저장되었습니다!")
-                st.rerun()
+                # [핵심 방어 코드] Supabase 테이블 스키마에 맞춰 유연하게 키 이름을 자동 매핑하여 인서트 시도
+                success = False
+                payload_candidates = [
+                    {"building_name": ex_bname, "expense_date": str(ex_date), "description": ex_desc, "amount": ex_amount},
+                    {"building": ex_bname, "date": str(ex_date), "content": ex_desc, "amount": ex_amount},
+                    {"building_name": ex_bname, "date": str(ex_date), "description": ex_desc, "cost": ex_amount}
+                ]
+                
+                for payload in payload_candidates:
+                    try:
+                        supabase.table("expenses").insert(payload).execute()
+                        success = True
+                        break
+                    except:
+                        continue
+                
+                if success:
+                    st.success("지출 장부가 클라우드에 저장되었습니다!")
+                    st.rerun()
+                else:
+                    st.error("저장에 실패했습니다. Supabase의 'expenses' 테이블 컬럼명을 확인해 주세요.")
 
 with tab3:
     st.subheader("📁 지난 계약 및 매매 이력 장부")
