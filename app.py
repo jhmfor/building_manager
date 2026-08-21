@@ -222,25 +222,33 @@ with tab1:
                 st.rerun()
 
 # ==========================================
-# [2페이지] 지출 및 공사 장부 (독립 추출 버전)
+# [2페이지] 지출 및 공사 장부 (개선 버전)
 # ==========================================
 with tab2:
     st.subheader("💰 건물 유지보수 및 지출 장부")
     
     # 🔍 검색 기능
-    exp_search = st.text_input("🔍 지출 내역 검색", placeholder="건물명, 호실 또는 내역을 입력하세요", key="exp_search_input")
+    exp_search = st.text_input("🔍 지출 내역 검색", placeholder="건물명, 호실, 내역 또는 카테고리 검색", key="exp_search_input")
     
     display_expenses = expenses_df.copy()
-    if exp_search and not display_expenses.empty:
-        mask = display_expenses.apply(lambda row: row.astype(str).str.contains(exp_search, case=False).any(), axis=1)
-        display_expenses = display_expenses[mask]
     
-    # 💵 비용 합산 기능
-    total_cost = 0
-    if not display_expenses.empty and "비용" in display_expenses.columns:
-        # 숫자가 아닌 문자 제거 후 합산
-        numeric_costs = display_expenses["비용"].astype(str).str.replace(r'[^\d]', '', regex=True)
-        total_cost = pd.to_numeric(numeric_costs, errors='coerce').sum()
+    # 데이터 컬럼 이름 확인 및 처리 (Supabase 테이블과 데이터프레임 컬럼 매칭)
+    # 컬럼이 존재할 경우에만 필터링 수행
+    if not display_expenses.empty:
+        if exp_search:
+            mask = display_expenses.apply(lambda row: row.astype(str).str.contains(exp_search, case=False).any(), axis=1)
+            display_expenses = display_expenses[mask]
+        
+        # 💵 비용 합산 로직 강화 (컬럼명이 '비용' 혹은 'amount'일 경우 대응)
+        cost_col = "비용" if "비용" in display_expenses.columns else "amount"
+        if cost_col in display_expenses.columns:
+            # 숫자가 아닌 문자 제거 후 합산
+            numeric_costs = display_expenses[cost_col].astype(str).str.replace(r'[^\d]', '', regex=True)
+            total_cost = pd.to_numeric(numeric_costs, errors='coerce').sum()
+        else:
+            total_cost = 0
+    else:
+        total_cost = 0
     
     st.markdown(
         f"""
@@ -253,9 +261,7 @@ with tab2:
     
     # 지출 장부 표 출력
     if not display_expenses.empty:
-        st.markdown("##### 📋 지출 장부 요약표 (건물명, 호실, 날짜, 내역, 비용 순)")
-        safe_cols = [c for c in ["건물명", "호실", "날짜", "내역", "비용"] if c in display_expenses.columns]
-        st.dataframe(display_expenses[safe_cols], use_container_width=True, hide_index=True)
+        st.dataframe(display_expenses, use_container_width=True, hide_index=True)
     else:
         st.info("조건에 맞는 지출 내역이 없습니다.")
         
@@ -263,46 +269,38 @@ with tab2:
     st.markdown("#### ➕ 새로운 지출 내역 등록")
     with st.form("expense_add_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
-        ex_bname = col1.text_input("건물명", placeholder="예: 부산 센토빌")
-        ex_rname = col2.text_input("호실", placeholder="예: 302호")
+        ex_bname = col1.text_input("건물명")
+        ex_rname = col2.text_input("호실")
         
-        col3, col4, col5 = st.columns(3)
-        ex_date = col3.date_input("날짜", value=datetime.today())
-        ex_desc = col4.text_input("내용", placeholder="예: 도어락 교체")
-        ex_amount = col5.text_input("비용(원)", value="100000")
+        col3, col4 = st.columns(2)
+        ex_category = col3.selectbox("카테고리", ["수리비", "공사비", "세금", "중개수수료", "기타"])
+        ex_date = col4.date_input("날짜", value=datetime.today())
+        
+        ex_desc = st.text_input("상세 내역", placeholder="예: 도어락 교체")
+        ex_amount = st.text_input("비용(원)", value="0")
         
         ex_submitted = st.form_submit_button("지출 내역 저장", type="primary")
+        
         if ex_submitted:
-            if not ex_bname or not ex_desc:
-                st.warning("건물명과 내용은 필수 입력입니다!")
+            if not ex_bname or not ex_desc or not ex_amount:
+                st.warning("필수 입력 항목을 확인해주세요!")
             else:
                 clean_amount = "".join(filter(str.isdigit, str(ex_amount)))
                 
-                # Supabase 데이터 구조 확인용
-                try:
-                    test_res = supabase.table("expenses").select("*").limit(1).execute()
-                    first_row = test_res.data[0] if test_res.data else {}
-                except:
-                    first_row = {}
-                
+                # Supabase 삽입 데이터 표준화
                 insert_data = {
                     "building_name": ex_bname,
+                    "room_number": ex_rname,
+                    "category": ex_category,
                     "expense_date": str(ex_date),
                     "description": ex_desc,
                     "amount": clean_amount
                 }
                 
-                # DB 스키마에 맞춘 유연한 처리
-                if "room_number" in first_row:
-                    insert_data["room_number"] = ex_rname
-                elif "category" in first_row:
-                    insert_data["category"] = ex_rname
-                else:
-                    insert_data["category"] = ex_rname
-
                 supabase.table("expenses").insert(insert_data).execute()
-                st.success("클라우드에 안전하게 저장되었습니다!")
+                st.success("데이터가 클라우드에 저장되었습니다!")
                 st.rerun()
+
 
 # ==========================================
 # [3페이지] 지난 계약 및 매매 관리 (마스터 버전)
