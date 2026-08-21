@@ -24,7 +24,6 @@ def load_contracts():
     if not data:
         return pd.DataFrame(columns=["id", "건물명", "호실", "임차인", "임차인연락처", "부동산명", "부동산연락처", "보증금(원)", "월세(원)", "납부일", "계약일", "만료일", "특약사항", "상태"])
     df = pd.DataFrame(data)
-    # 영문 DB 컬럼을 한글 화면용으로 깔끔하게 이름 변경
     rename_map = {
         "building_name": "건물명",
         "room_number": "호실",
@@ -47,7 +46,7 @@ def load_expenses():
     res = supabase.table("expenses").select("*").execute()
     data = res.data
     if not data:
-        return pd.DataFrame(columns=["날짜", "건물명", "카테고리", "내역", "지출금액(원)"])
+        return pd.DataFrame(columns=["id", "날짜", "건물명", "카테고리", "내역", "지출금액(원)"])
     return pd.DataFrame(data)
 
 def load_history():
@@ -56,6 +55,9 @@ def load_history():
     if not data:
         return pd.DataFrame(columns=["건물명", "호실", "계약기간", "보증금", "월세", "매수가(원)", "매도가(원)"])
     df = pd.DataFrame(data)
+    # 요청사항: '지난 계약 및 매매 관리' 테이블에서 id 컬럼 제거
+    if 'id' in df.columns:
+        df = df.drop(columns=['id'])
     rename_map = {
         "building_name": "건물명",
         "room_number": "호실",
@@ -98,7 +100,7 @@ with tab1:
                 rent_val = row.get('월세(원)', '0')
                 pay_day = row.get('납부일', '25일')
                 
-                st.markdown(f"💰 **보증금**: {deposit_val}원 &nbsp;|&nbsp; 💵 **월세**: {rent_val}원 (매월 **{pay_day}**)")
+                st.markdown(f"💰 **보증금**: {deposit_val}원 &nbsp;|&nbsp; 💵 **월세**: {rent_val}원 (매월 **{pay_day}**) 통보")
                 
                 t_name = row.get('임차인', '')
                 t_phone = row.get('임차인연락처', '')
@@ -148,6 +150,20 @@ with tab1:
                             e_rent = st.text_input("월세", value=str(row.get('월세(원)', '')))
                             e_pay_day = st.text_input("월세 납부일", value=str(row.get('납부일', '')))
                             
+                            # 요청사항: 수정 폼에 계약 시작일과 만기일 추가
+                            try:
+                                default_start = pd.to_datetime(start_d).date() if pd.notnull(start_d) and start_d != "" else datetime.today().date()
+                            except:
+                                default_start = datetime.today().date()
+                                
+                            try:
+                                default_end = pd.to_datetime(end_d).date() if pd.notnull(end_d) and end_d != "" else datetime.today().date()
+                            except:
+                                default_end = datetime.today().date()
+
+                            e_start_date = st.date_input("계약 시작일 수정", value=default_start)
+                            e_end_date = st.date_input("계약 만료일 수정", value=default_end)
+                            
                             update_btn = st.form_submit_button("클라우드에 수정 반영", type="primary")
                             delete_btn = st.form_submit_button("클라우드에서 계약 삭제")
                             
@@ -161,7 +177,9 @@ with tab1:
                                     "agency_phone": e_rephone,
                                     "deposit_amount": e_deposit,
                                     "monthly_rent": e_rent,
-                                    "pay_day": e_pay_day
+                                    "pay_day": e_pay_day,
+                                    "start_date": str(e_start_date),
+                                    "end_date": str(e_end_date)
                                 }).eq("id", row_id).execute()
                                 st.session_state[edit_state_key] = False
                                 st.success("클라우드 서버에 수정 사항이 반영되었습니다!")
@@ -254,7 +272,7 @@ with tab3:
     else:
         filtered_history = history_df
         
-    st.dataframe(filtered_history, use_container_width=True)
+    st.dataframe(filtered_history, use_container_width=True, hide_index=True)
     
     def create_excel(df1, df2, df3):
         output = BytesIO()
