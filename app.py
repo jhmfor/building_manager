@@ -56,14 +56,15 @@ def load_expenses():
     
     df = pd.DataFrame(data)
     
-    # DB 컬럼명을 화면 표시용 한글 순서로 매핑 (없는 컬럼은 유연하게 대처)
-    rename_map = {}
-    if "building_name" in df.columns: rename_map["building_name"] = "건물명"
-    if "room_number" in df.columns: rename_map["room_number"] = "호실"
-    if "expense_date" in df.columns: rename_map["expense_date"] = "날짜"
-    if "description" in df.columns: rename_map["description"] = "내역"
-    if "amount" in df.columns: rename_map["amount"] = "비용"
-    
+    # DB 컬럼(building_name, category/room_number, expense_date, description, amount)을 한글로 매핑
+    rename_map = {
+        "building_name": "건물명",
+        "room_number": "호실",
+        "category": "호실",  # room_number가 없을 경우 category를 호실 자리로 대체 활용
+        "expense_date": "날짜",
+        "description": "내역",
+        "amount": "비용"
+    }
     df = df.rename(columns=rename_map)
     
     expected_cols = ["id", "건물명", "호실", "날짜", "내역", "비용"]
@@ -205,13 +206,19 @@ with tab2:
                         del_exp = col_b2.form_submit_button("지출 내역 삭제")
                         
                         if up_exp:
-                            supabase.table("expenses").update({
+                            # DB에 맞게 category나 room_number 중 존재하는 필드로 안전하게 업데이트
+                            update_dict = {
                                 "building_name": ed_bname,
-                                "room_number": ed_rname,
                                 "expense_date": ed_date,
                                 "description": ed_desc,
                                 "amount": ed_amount
-                            }).eq("id", row_id).execute()
+                            }
+                            if "room_number" in res_raw.data[0]:
+                                update_dict["room_number"] = ed_rname
+                            else:
+                                update_dict["category"] = ed_rname
+                                
+                            supabase.table("expenses").update(update_dict).eq("id", row_id).execute()
                             st.success("수정되었습니다!")
                             st.rerun()
                             
@@ -223,7 +230,7 @@ with tab2:
         st.markdown("---")
         st.markdown("##### 📋 지출 장부 요약표 (건물명, 호실, 날짜, 내역, 비용 순)")
         
-        safe_cols = [c for c in ["건물명", "호실", "날짜", "내용", "비용"] if c in display_expenses.columns]
+        safe_cols = [c for c in ["건물명", "호실", "날짜", "내역", "비용"] if c in display_expenses.columns]
         st.dataframe(display_expenses[safe_cols], use_container_width=True, hide_index=True)
     else:
         st.info("조건에 맞는 지출 내역이 없습니다.")
@@ -245,10 +252,9 @@ with tab2:
             if not ex_bname or not ex_desc:
                 st.warning("건물명과 내용은 필수 입력입니다!")
             else:
-                # 에러 방지를 위해 기본 컬럼들만 안전하게 전송
                 insert_data = {
                     "building_name": ex_bname,
-                    "room_number": ex_rname,
+                    "category": ex_rname,  # 현재 테이블의 category 컬럼을 호실 데이터 저장용으로 사용
                     "expense_date": str(ex_date),
                     "description": ex_desc,
                     "amount": ex_amount
