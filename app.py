@@ -56,10 +56,10 @@ def load_expenses():
     
     df = pd.DataFrame(data)
     
-    # DB 컬럼을 화면 표시용 한글 순서(건물명, 호실, 날짜, 내역, 비용)로 매핑
+    # DB 컬럼 매핑
     rename_map = {
         "building_name": "건물명",
-        "category": "호실",      # DB의 category 컬럼을 화면의 '호실' 위치에 매핑
+        "category": "호실",
         "expense_date": "날짜",
         "description": "내역",
         "amount": "비용"
@@ -205,13 +205,13 @@ with tab2:
                         del_exp = col_b2.form_submit_button("지출 내역 삭제")
                         
                         if up_exp:
-                            # 현재 Supabase 테이블 구조(building_name, category, expense_date, description, amount)에 정확히 맞춤
+                            clean_amount = "".join(filter(str.isdigit, str(ed_amount)))
                             update_dict = {
                                 "building_name": ed_bname,
                                 "category": ed_rname,
                                 "expense_date": ed_date,
                                 "description": ed_desc,
-                                "amount": ed_amount
+                                "amount": int(clean_amount) if clean_amount else 0
                             }
                             supabase.table("expenses").update(update_dict).eq("id", row_id).execute()
                             st.success("수정되었습니다!")
@@ -240,20 +240,20 @@ with tab2:
         col3, col4, col5 = st.columns(3)
         ex_date = col3.date_input("날짜", value=datetime.today())
         ex_desc = col4.text_input("내용", placeholder="예: 도어락 교체")
-        ex_amount = col5.text_input("비용(원)", value="100,000")
+        ex_amount = col5.text_input("비용(원)", value="100000")
         
         ex_submitted = st.form_submit_button("지출 내역 저장", type="primary")
         if ex_submitted:
             if not ex_bname or not ex_desc:
                 st.warning("건물명과 내용은 필수 입력입니다!")
             else:
-                # 에러 원인이었던 누락 컬럼 문제를 해결하기 위해 실제 DB 컬럼명으로 정확히 전송
+                clean_amount = "".join(filter(str.isdigit, str(ex_amount)))
                 insert_data = {
                     "building_name": ex_bname,
                     "category": ex_rname,
                     "expense_date": str(ex_date),
                     "description": ex_desc,
-                    "amount": ex_amount
+                    "amount": int(clean_amount) if clean_amount else 0
                 }
                 supabase.table("expenses").insert(insert_data).execute()
                 st.success("클라우드에 안전하게 저장되었습니다!")
