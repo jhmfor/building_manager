@@ -5,7 +5,7 @@ from datetime import datetime
 from supabase import create_client
 
 st.set_page_config(page_title="건물주 스마트 비서", page_icon="🏢", layout="centered")
-st.title("🏢 건물주 스마트 비서 (Pro Version - Cloud DB)")
+st.title("🏢 건물주 스마트 비서 (한글 Pro Version)")
 st.markdown("임대 계약, 지출 장부, 그리고 지난 계약 및 매매 이력 관리까지 클라우드 서버와 실시간 연동됩니다.")
 
 # 1. Supabase 클라우드 연결 설정
@@ -17,15 +17,30 @@ def init_connection():
 
 supabase = init_connection()
 
-# 2. 클라우드에서 데이터 불러오기 함수들
+# 2. 클라우드에서 데이터 불러오기 함수들 (한글 컬럼 매핑)
 def load_contracts():
     res = supabase.table("contracts").select("*").execute()
     data = res.data
     if not data:
         return pd.DataFrame(columns=["id", "건물명", "호실", "임차인", "임차인연락처", "부동산명", "부동산연락처", "보증금(원)", "월세(원)", "납부일", "계약일", "만료일", "특약사항", "상태"])
-    # DB 컬럼 매핑에 맞춰 변환
     df = pd.DataFrame(data)
-    # Supabase 컬럼명을 기존 코드 호환용으로 맞춤
+    # 영문 DB 컬럼을 한글 화면용으로 깔끔하게 이름 변경
+    rename_map = {
+        "building_name": "건물명",
+        "room_number": "호실",
+        "tenant_name": "임차인",
+        "tenant_phone": "임차인연락처",
+        "agency_name": "부동산명",
+        "agency_phone": "부동산연락처",
+        "deposit_amount": "보증금(원)",
+        "monthly_rent": "월세(원)",
+        "pay_day": "납부일",
+        "start_date": "계약일",
+        "end_date": "만료일",
+        "special_notes": "특약사항",
+        "status": "상태"
+    }
+    df = df.rename(columns=rename_map)
     return df
 
 def load_expenses():
@@ -40,7 +55,18 @@ def load_history():
     data = res.data
     if not data:
         return pd.DataFrame(columns=["id", "건물명", "호실", "계약기간", "보증금", "월세", "매수가(원)", "매도가(원)"])
-    return pd.DataFrame(data)
+    df = pd.DataFrame(data)
+    rename_map = {
+        "building_name": "건물명",
+        "room_number": "호실",
+        "contract_period": "계약기간",
+        "deposit": "보증금",
+        "rent": "월세",
+        "purchase_price": "매수가(원)",
+        "sale_price": "매도가(원)"
+    }
+    df = df.rename(columns=rename_map)
+    return df
 
 # 앱 실행 시 클라우드에서 최신 데이터 동기화
 contracts_df = load_contracts()
@@ -50,7 +76,7 @@ history_df = load_history()
 tab1, tab2, tab3 = st.tabs(["📋 임대 계약 및 관리", "💰 지출 및 공사 장부", "📁 지난 계약 및 매매 관리"])
 
 with tab1:
-    st.subheader("현재 임대 계약 현황 및 관리 (Cloud DB)")
+    st.subheader("현재 임대 계약 현황 및 관리")
     
     if len(contracts_df) > 0:
         for idx, row in contracts_df.iterrows():
@@ -58,9 +84,9 @@ with tab1:
             with st.container(border=True):
                 col_t1, col_t2 = st.columns([2, 1])
                 with col_t1:
-                    st.markdown(f"### 🏢 {row.get('building_name', row.get('건물명', ''))} {row.get('room_number', row.get('호실', ''))}")
+                    st.markdown(f"### 🏢 {row.get('건물명', '')} {row.get('호실', '')}")
                 with col_t2:
-                    status_badge = row.get('status', row.get('상태', '계약중'))
+                    status_badge = row.get('상태', '계약중')
                     if status_badge == "계약중":
                         st.markdown(f"🟢 **{status_badge}**")
                     elif status_badge == "만료임박":
@@ -68,22 +94,22 @@ with tab1:
                     else:
                         st.markdown(f"🔴 **{status_badge}**")
                 
-                deposit_val = row.get('deposit_amount', row.get('보증금(원)', '0'))
-                rent_val = row.get('monthly_rent', row.get('월세(원)', '0'))
-                pay_day = row.get('pay_day', row.get('납부일', '25일'))
+                deposit_val = row.get('보증금(원)', '0')
+                rent_val = row.get('월세(원)', '0')
+                pay_day = row.get('납부일', '25일')
                 
                 st.markdown(f"💰 **보증금**: {deposit_val}원 &nbsp;|&nbsp; 💵 **월세**: {rent_val}원 (매월 **{pay_day}**) 통보")
                 
-                t_name = row.get('tenant_name', row.get('임차인', ''))
-                t_phone = row.get('tenant_phone', row.get('임차인연락처', ''))
-                r_name = row.get('agency_name', row.get('부동산명', ''))
-                r_phone = row.get('agency_phone', row.get('부동산연락처', ''))
+                t_name = row.get('임차인', '')
+                t_phone = row.get('임차인연락처', '')
+                r_name = row.get('부동산명', '')
+                r_phone = row.get('부동산연락처', '')
                 
                 combined_info = f"👤 **임차인**: {t_name} ([전화](tel:{t_phone}) | [문자](sms:{t_phone})) &nbsp;/&nbsp; 🏠 **부동산**: {r_name} ([전화](tel:{r_phone}) | [문자](sms:{r_phone}))"
                 st.markdown(combined_info)
                 
-                start_d = row.get('start_date', row.get('계약일', ''))
-                end_d = row.get('end_date', row.get('만료일', ''))
+                start_d = row.get('계약일', '')
+                end_d = row.get('만료일', '')
                 st.markdown(
                     f"""
                     <div style="background-color: #f0f2f6; padding: 10px; border-radius: 8px; margin-top: 5px; margin-bottom: 5px;">
@@ -93,11 +119,10 @@ with tab1:
                     unsafe_allow_html=True
                 )
                 
-                special_note = row.get('special_notes', row.get('특약사항', ''))
+                special_note = row.get('특약사항', '')
                 if pd.notnull(special_note) and str(special_note).strip() != "":
                     st.info(f"📝 **특약 사항**: {special_note}")
                 
-                # 수정/삭제 버튼 처리
                 edit_state_key = f"is_editing_{row_id}"
                 if edit_state_key not in st.session_state:
                     st.session_state[edit_state_key] = False
@@ -112,16 +137,16 @@ with tab1:
                     with st.container(border=True):
                         st.markdown(f"#### 🛠️ 클라우드 데이터 수정")
                         with st.form(f"edit_form_{row_id}"):
-                            e_bname = st.text_input("건물명", value=str(row.get('building_name', row.get('건물명', ''))))
-                            e_rname = st.text_input("호실", value=str(row.get('room_number', row.get('호실', ''))))
-                            e_tname = st.text_input("임차인 이름", value=str(row.get('tenant_name', row.get('임차인', ''))))
-                            e_tphone = st.text_input("임차인 연락처", value=str(row.get('tenant_phone', row.get('임차인연락처', ''))))
-                            e_rename = st.text_input("부동산 이름", value=str(row.get('agency_name', row.get('부동산명', ''))))
-                            e_rephone = st.text_input("부동산 연락처", value=str(row.get('agency_phone', row.get('부동산연락처', ''))))
+                            e_bname = st.text_input("건물명", value=str(row.get('건물명', '')))
+                            e_rname = st.text_input("호실", value=str(row.get('호실', '')))
+                            e_tname = st.text_input("임차인 이름", value=str(row.get('임차인', '')))
+                            e_tphone = st.text_input("임차인 연락처", value=str(row.get('임차인연락처', '')))
+                            e_rename = st.text_input("부동산 이름", value=str(row.get('부동산명', '')))
+                            e_rephone = st.text_input("부동산 연락처", value=str(row.get('부동산연락처', '')))
                             
-                            e_deposit = st.text_input("보증금", value=str(row.get('deposit_amount', row.get('보증금(원)', ''))))
-                            e_rent = st.text_input("월세", value=str(row.get('monthly_rent', row.get('월세(원)', ''))))
-                            e_pay_day = st.text_input("월세 납부일", value=str(row.get('pay_day', row.get('납부일', ''))))
+                            e_deposit = st.text_input("보증금", value=str(row.get('보증금(원)', '')))
+                            e_rent = st.text_input("월세", value=str(row.get('월세(원)', '')))
+                            e_pay_day = st.text_input("월세 납부일", value=str(row.get('납부일', '')))
                             
                             update_btn = st.form_submit_button("클라우드에 수정 반영", type="primary")
                             delete_btn = st.form_submit_button("클라우드에서 계약 삭제")
@@ -186,7 +211,6 @@ with tab1:
                 start_str = start_date.strftime("%Y-%m-%d")
                 end_str = end_date.strftime("%Y-%m-%d")
                 
-                # Supabase contracts 테이블에 즉시 전송
                 supabase.table("contracts").insert({
                     "building_name": b_name,
                     "room_number": r_name,
@@ -203,7 +227,6 @@ with tab1:
                     "status": "계약중"
                 }).execute()
                 
-                # history 테이블에도 이력 적재
                 supabase.table("history").insert({
                     "building_name": b_name,
                     "room_number": r_name,
@@ -218,11 +241,11 @@ with tab1:
                 st.rerun()
 
 with tab2:
-    st.subheader("건물 유지보수 및 지출 장부 (Cloud)")
+    st.subheader("건물 유지보수 및 지출 장부")
     st.dataframe(expenses_df, use_container_width=True)
 
 with tab3:
-    st.subheader("📁 지난 계약 및 매매 이력 장부 (Cloud)")
+    st.subheader("📁 지난 계약 및 매매 이력 장부")
     search_query = st.text_input("🔍 항목별 검색", placeholder="검색어를 입력하세요")
     
     if search_query and len(history_df) > 0:
