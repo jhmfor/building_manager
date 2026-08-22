@@ -13,9 +13,9 @@ st.title("🏢 건물주 스마트 비서 (Pro Version)")
 st.markdown("""
     <style>
     button[data-baseweb="tab"] {
-        font-size: 30px !important;      
+        font-size: 26px !important;      
         font-weight: 1200 !important;     
-        padding: 20px 40px !important;   
+        padding: 15px 30px !important;   
     }
     label {
         font-size: 30px !important;
@@ -92,7 +92,6 @@ def load_expenses():
     # [컬럼 순서 재배치] '카테고리'를 '호실'과 '내역' 사이로 이동
     expected_cols = ["id", "날짜", "건물명", "호실", "카테고리", "내역", "비용"]
     existing_cols = [col for col in expected_cols if col in df.columns]
-    # 누락된 기타 컬럼이 있다면 뒤에 붙여줌
     for col in df.columns:
         if col not in existing_cols:
             existing_cols.append(col)
@@ -117,6 +116,7 @@ contracts_df = load_contracts()
 expenses_df = load_expenses()
 history_df = load_history()
 
+# 탭 4개 선언
 tab1, tab2, tab3, tab4 = st.tabs(["📋 건물 계약 및 관리", "💰 지출 내역 관리", "📁 지난 계약 및 매매 관리", "💸 월세 관리"])
 
 # ==========================================
@@ -425,7 +425,7 @@ with tab2:
                 st.rerun()
 
 # ==========================================
-# [3페이지] 지난 계약 및 매매 관리
+# [3페이지] 지난 계약 및 매매 이력 장부
 # ==========================================
 with tab3:
     if st.session_state.get("clear_history_input", False):
@@ -479,64 +479,63 @@ with tab3:
     else:
         st.info("검색 결과와 일치하는 이력 장부가 없습니다.")
 
-    def create_excel(df1, df2, df3):
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df1.to_excel(writer, index=False, sheet_name='건물 계약 및 관리')
-            df2.to_excel(writer, index=False, sheet_name='지출 내역 관리')
-            df3.to_excel(writer, index=False, sheet_name='지난 계약 및 매매 관리')
-            df3.to_excel(writer, index=False, sheet_name='월세 관리')
-        return output.getvalue()
-    
-    st.markdown("---")
-    excel_file = create_excel(contracts_df, expenses_df, history_df)
-    st.download_button(
-        label="📊 전체 세무 및 매매 장부 엑셀 다운로드 (.xlsx)",
-        data=excel_file,
-        file_name=f"건물종합관리장부_{datetime.now().strftime('%Y%m%d')}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True
-        
 # ==========================================
-# [4페이지] 월세 관리
+# [4페이지] 월세 관리 (신규 연동)
 # ==========================================
 with tab4:
+    st.header("💸 이달의 월세 수금 현황")
+    
     if not contracts_df.empty:
-        # 데이터 정제: 월세 숫자만 추출
         df_rent = contracts_df.copy()
         df_rent['월세_숫자'] = df_rent['월세(원)'].str.replace(r'[^\d]', '', regex=True).astype(int)
         
-        # 입금 상태 관리 (세션 스테이트 활용)
         if 'rent_status' not in st.session_state:
             st.session_state['rent_status'] = {f"{row['건물명']}_{row['호실']}": False for _, row in df_rent.iterrows()}
 
-        # 월세 목록 표시
         for idx, row in df_rent.iterrows():
-            key = f"{row['건물명']}_{row['호실']}"
+            key = f"rent_check_{row['건물명']}_{row['호실']}"
+            if key not in st.session_state:
+                st.session_state[key] = False
+                
             col1, col2, col3 = st.columns([2, 2, 1])
-            
             with col1:
-                st.markdown(f"**{row['건물명']} {row['호실']}호**")
+                prop_c = row.get('카테고리', '원룸')
+                st.markdown(f"**[{prop_c}] {row['건물명']} {row['호실']}호**")
                 st.caption(f"납부일: 매월 {row['납부일']}")
-            
             with col2:
                 st.markdown(f"### {row['월세(원)']}원")
-                
             with col3:
-                status = st.checkbox("입금 완료", key=key)
-                st.session_state['rent_status'][key] = status
+                is_checked = st.checkbox("입금 완료", key=key)
+                st.session_state['rent_status'][f"{row['건물명']}_{row['호실']}"] = is_checked
 
-        # 수금 통계
         total_rent = df_rent['월세_숫자'].sum()
-        collected_rent = sum([df_rent.loc[i, '월세_숫자'] for i, row in df_rent.iterrows() if st.session_state['rent_status'].get(f"{row['건물명']}_{row['호실']}")] )
+        collected_rent = sum([df_rent.loc[i, '월세_숫자'] for i, row in df_rent.iterrows() if st.session_state['rent_status'].get(f"{row['건물명']}_{row['호실']}")])
         
         st.markdown("---")
-        st.metric("총 예정 월세", f"{total_rent:,}원")
-        st.metric("현재 수금액", f"{collected_rent:,}원", delta=f"{collected_rent - total_rent:,}원")
+        col_m1, col_m2 = st.columns(2)
+        col_m1.metric("총 예정 월세", f"{total_rent:,}원")
+        col_m2.metric("현재 수금액", f"{collected_rent:,}원", delta=f"{collected_rent - total_rent:,}원")
         
-        # 진행률 바
         progress = collected_rent / total_rent if total_rent > 0 else 0
         st.progress(progress)
     else:
-        st.info("등록된 계약 정보가 없습니다. 1페이지에서 계약을 먼저 등록해주세요.")  
-    )
+        st.info("등록된 계약 정보가 없습니다. 1페이지에서 계약을 먼저 등록해주세요.")
+
+# 엑셀 다운로드 버튼
+def create_excel(df1, df2, df3):
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df1.to_excel(writer, index=False, sheet_name='건물 계약 및 관리')
+        df2.to_excel(writer, index=False, sheet_name='지출 내역 관리')
+        df3.to_excel(writer, index=False, sheet_name='지난 계약 및 매매 관리')
+    return output.getvalue()
+
+st.markdown("---")
+excel_file = create_excel(contracts_df, expenses_df, history_df)
+st.download_button(
+    label="📊 전체 세무 및 매매 장부 엑셀 다운로드 (.xlsx)",
+    data=excel_file,
+    file_name=f"건물종합관리장부_{datetime.now().strftime('%Y%m%d')}.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    use_container_width=True
+)
