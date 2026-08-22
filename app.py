@@ -150,7 +150,13 @@ with tab1:
                 rent_val = format_currency(row.get('월세(원)', '0'))
                 pay_day = row.get('납부일', '25일')
                 
+                # --- [추가된 부분] 매수금과 대출금 포맷팅 및 카드 출력 ---
+                purchase_val = format_currency(row.get('매수금', '0'))
+                loan_val = format_currency(row.get('대출금', '0'))
+                
                 st.markdown(f"💰 **보증금**: {deposit_val}원 &nbsp;|&nbsp; 💵 **월세**: {rent_val}원 (매월 **{pay_day}**)")
+                st.markdown(f"🏷️ **매수금**: {purchase_val}원 &nbsp;|&nbsp; 🏦 **대출금**: {loan_val}원")
+                # ----------------------------------------------------
                 
                 t_name = row.get('임차인', '')
                 t_phone = row.get('임차인연락처', '')
@@ -278,7 +284,6 @@ with tab1:
         b_name = col1.text_input("건물명", placeholder="예: 부산 센토빌")
         r_name = col2.text_input("호실", placeholder="예: 302호")
         
-        # 신규 추가된 매수금 및 대출금 입력 필드
         c_p1, c_p2 = st.columns(2)
         purchase_val_input = c_p1.text_input("매수금 (원)", value="0")
         loan_val_input = c_p2.text_input("대출금 (원)", value="0")
@@ -311,7 +316,6 @@ with tab1:
                 end_str = end_date.strftime("%Y-%m-%d")
                 
                 try:
-                    # contracts 테이블 저장 (매수금, 대출금 포함)
                     supabase.table("contracts").insert({
                         "property_type": property_category, "building_name": b_name, "room_number": r_name, 
                         "tenant_name": t_name, "tenant_phone": t_phone, "agency_name": re_name, 
@@ -321,7 +325,6 @@ with tab1:
                         "special_notes": special_input, "status": "계약중"
                     }).execute()
                     
-                    # history 테이블 연동 저장 (매수금, 대출금 연동)
                     supabase.table("history").insert({
                         "building_name": f"[{property_category}] {b_name}", "room_number": r_name,
                         "contract_period": f"{start_str} ~ {end_str}",
