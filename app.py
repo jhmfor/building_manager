@@ -10,6 +10,16 @@ import re
 st.set_page_config(page_title="건물주 스마트 비서", page_icon="🏢", layout="centered")
 st.title("🏢 건물주 스마트 비서 (Pro Version)")
 
+# --- [UI 커스텀 CSS: 탭 글씨 크기 키우기] ---
+st.markdown("""
+    <style>
+    /* 탭(Tab) 라벨 글씨 크기 및 굵기 조정 */
+    .stTabs [data-baseweb="tab"] p {
+        font-size: 18px !important;
+        font-weight: bold !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 # --- 유틸리티 함수: 천 단위 콤마 자동 포맷팅 ---
 def format_currency(value):
