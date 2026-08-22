@@ -3,6 +3,7 @@ import pandas as pd
 from io import BytesIO
 from datetime import datetime
 from supabase import create_client
+import json
 import re
 
 # 페이지 설정
@@ -201,7 +202,6 @@ with tab1:
                             delete_btn = st.form_submit_button("클라우드에서 계약 삭제")
                             
                             if update_btn:
-                                # Supabase 컬럼 매핑에 맞춰 정확한 키값으로 업데이트 전송
                                 update_payload = {
                                     "property_type": e_cat, 
                                     "building_name": e_bname, 
@@ -217,11 +217,15 @@ with tab1:
                                     "end_date": str(e_end_date),
                                     "special_notes": e_special
                                 }
-                                supabase.table("contracts").update(update_payload).eq("id", row_id).execute()
-                                st.session_state[edit_state_key] = False
-                                st.success("클라우드 서버에 수정 사항이 반영되었습니다!")
-                                st.rerun()
-                                
+                                try:
+                                    supabase.table("contracts").update(update_payload).eq("id", row_id).execute()
+                                    st.session_state[edit_state_key] = False
+                                    st.success("클라우드 서버에 수정 사항이 반영되었습니다!")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"업데이트 중 데이터베이스 오류 발생: {e}")
+                                    st.info("💡 팁: Supabase 대시보드에서 'contracts' 테이블에 'property_type'과 'special_notes' 컬럼이 정확히 생성되어 있는지 확인해 주세요.")
+                                    
                             if delete_btn:
                                 supabase.table("contracts").delete().eq("id", row_id).execute()
                                 st.session_state[edit_state_key] = False
@@ -267,23 +271,26 @@ with tab1:
                 start_str = start_date.strftime("%Y-%m-%d")
                 end_str = end_date.strftime("%Y-%m-%d")
                 
-                supabase.table("contracts").insert({
-                    "property_type": property_category, "building_name": b_name, "room_number": r_name, 
-                    "tenant_name": t_name, "tenant_phone": t_phone, "agency_name": re_name, 
-                    "agency_phone": re_phone, "deposit_amount": deposit_val_input, "monthly_rent": rent_val_input, 
-                    "pay_day": pay_day_input, "start_date": start_str, "end_date": end_str, 
-                    "special_notes": special_input, "status": "계약중"
-                }).execute()
-                
-                supabase.table("history").insert({
-                    "building_name": f"[{property_category}] {b_name}", "room_number": r_name,
-                    "contract_period": f"{start_str} ~ {end_str}",
-                    "deposit": deposit_val_input, "rent": rent_val_input,
-                    "purchase_price": "0", "sale_price": "0"
-                }).execute()
-                
-                st.success("클라우드 서버에 안전하게 저장되었습니다!")
-                st.rerun()
+                try:
+                    supabase.table("contracts").insert({
+                        "property_type": property_category, "building_name": b_name, "room_number": r_name, 
+                        "tenant_name": t_name, "tenant_phone": t_phone, "agency_name": re_name, 
+                        "agency_phone": re_phone, "deposit_amount": deposit_val_input, "monthly_rent": rent_val_input, 
+                        "pay_day": pay_day_input, "start_date": start_str, "end_date": end_str, 
+                        "special_notes": special_input, "status": "계약중"
+                    }).execute()
+                    
+                    supabase.table("history").insert({
+                        "building_name": f"[{property_category}] {b_name}", "room_number": r_name,
+                        "contract_period": f"{start_str} ~ {end_str}",
+                        "deposit": deposit_val_input, "rent": rent_val_input,
+                        "purchase_price": "0", "sale_price": "0"
+                    }).execute()
+                    
+                    st.success("클라우드 서버에 안전하게 저장되었습니다!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"저장 중 에러 발생: {e}")
 
 # ==========================================
 # [2페이지] 지출 및 공사 장부
