@@ -485,15 +485,13 @@ with tab3:
 # ==========================================
 # [4페이지] 월세 및 대출 상환 관리 (실시간 콤마 변환 반영)
 # ==========================================
-with tab4:
-    st.header("💸 연도별 월세 수금 및 대출 상환 통합 장부")
-    
+with tab4:    
     if not contracts_df.empty:
         current_year = datetime.now().year
         selected_year = st.selectbox("📅 관리 연도 선택", options=list(range(current_year - 2, current_year + 3)), index=2, key="rent_year_select")
         
         # --- [1. 월세 수금 장부] ---
-        st.markdown("### 📋 월세 수금 장부")
+        st.markdown("### 📋 월세 수금")
         rent_data = []
         for idx, row in contracts_df.iterrows():
             b_name = row.get('건물명', '')
@@ -541,7 +539,7 @@ with tab4:
                                 session_key = f"rent_{selected_year}_{b_name}_{r_num}_{col_name.replace('월', '')}"
                                 st.session_state[session_key] = format_currency(new_val)
 
-        # --- [2. 대출 상환 장부] ---
+        # --- [2. 대출 상환] ---
         st.markdown("---")
         st.markdown("### 🏦 대출 상환 장부")
         st.markdown("💡 **tip:** 매월 대출상환금액을 입력하세요. 입력 즉시 천 단위 콤마가 적용되며, 우측 '합산' 및 하단 '합산' 행이 자동 계산됩니다.")
