@@ -36,13 +36,22 @@ st.markdown("""
 
 # --- 유틸리티 함수: 천 단위 콤마 자동 포맷팅 ---
 def format_currency(value):
-    if value is None or pd.isna(value) or str(value).lower() == 'none':
+    if value is None or pd.isna(value) or str(value).lower() in ['none', 'nan', '']:
         return "0"
     try:
         clean_val = re.sub(r'[^\d]', '', str(value))
         return f"{int(clean_val):,}" if clean_val else "0"
     except:
         return str(value)
+
+def parse_int(value):
+    if value is None or pd.isna(value) or str(value).lower() in ['none', 'nan', '']:
+        return 0
+    try:
+        clean_val = re.sub(r'[^\d]', '', str(value))
+        return int(clean_val) if clean_val else 0
+    except:
+        return 0
 
 # 1. Supabase 클라우드 연결 설정
 @st.cache_resource
@@ -53,7 +62,7 @@ def init_connection():
 
 supabase = init_connection()
 
-# 2. 클라우드 데이터 불러오기 및 포맷팅 적용 함수들
+# 2. 클라우드 데이터 불러오기 함수들
 def load_contracts():
     res = supabase.table("contracts").select("*").execute()
     data = res.data
@@ -71,7 +80,7 @@ def load_contracts():
     if "property_type" not in df.columns:
         df["property_type"] = "원룸"
     if "loan_pay_day" not in df.columns:
-        df["loan_pay_day"] = "매월 말일"
+        df["loan_pay_day"] = "15일"
         
     df = df.rename(columns=rename_map)
     
@@ -91,13 +100,7 @@ def load_expenses():
     })
     if "비용" in df.columns:
         df["비용"] = df["비용"].apply(format_currency)
-    
-    expected_cols = ["id", "날짜", "건물명", "호실", "카테고리", "내역", "비용"]
-    existing_cols = [col for col in expected_cols if col in df.columns]
-    for col in df.columns:
-        if col not in existing_cols:
-            existing_cols.append(col)
-    return df[existing_cols]
+    return df
 
 def load_history():
     res = supabase.table("history").select("*").execute()
@@ -108,7 +111,6 @@ def load_history():
         "building_name": "건물명", "room_number": "호실", "contract_period": "계약기간", 
         "deposit": "보증금", "rent": "월세", "purchase_price": "매수가", "loan_amount": "대출금", "sale_price": "매도가"
     })
-    
     for col in ["보증금", "월세", "매수가", "대출금", "매도가"]:
         if col in df.columns:
             df[col] = df[col].apply(format_currency)
@@ -131,7 +133,6 @@ with tab1:
         for cat, cnt in category_counts.items():
             if pd.notnull(cat) and str(cat).strip() != "" and cnt > 0:
                 summary_badges.append(f"<b>{cat}</b> {cnt}개")
-        
         if summary_badges:
             badge_html = " &nbsp;|&nbsp; ".join(summary_badges)
             st.markdown(
@@ -146,7 +147,6 @@ with tab1:
     if len(contracts_df) > 0:
         for idx, row in contracts_df.iterrows():
             row_id = row.get('id')
-            
             end_d_str = row.get('만료일', '1900-01-01')
             try:
                 end_date_obj = pd.to_datetime(end_d_str)
@@ -164,9 +164,9 @@ with tab1:
                 
                 purchase_val = format_currency(row.get('매수금', '0'))
                 loan_val = format_currency(row.get('대출금', '0'))
-                loan_pay_day = row.get('대출상환일', '미입력')
+                loan_pay_day = row.get('대출상환일', '15일')
                 
-                st.markdown(f"🏷️ **매수금**: {purchase_val}원 &nbsp;|&nbsp; 🏦 **대출금**: {loan_val}원 (상환일: **{loan_pay_day}**)")
+                st.markdown(f"🏷️ **매수금**: {purchase_val}원 &nbsp;|&nbsp; 🏦 **대출금**: {loan_val}원 (상환일: **{loan_pay_day}**)부여")
                 st.markdown(f"💰 **보증금**: {deposit_val}원 &nbsp;|&nbsp; 💵 **월세**: {rent_val}원 (매월 **{pay_day}**)")
                 
                 t_name = row.get('임차인', '')
@@ -319,7 +319,6 @@ with tab1:
             else:
                 start_str = start_date.strftime("%Y-%m-%d")
                 end_str = end_date.strftime("%Y-%m-%d")
-                
                 try:
                     supabase.table("contracts").insert({
                         "property_type": property_category, "building_name": b_name, "room_number": r_name, 
@@ -360,7 +359,6 @@ with tab2:
     
     total_cost = 0
     target_col = "비용" if "비용" in display_expenses.columns else None
-    
     if not display_expenses.empty and target_col:
         numeric_costs = display_expenses[target_col].astype(str).str.replace(r'[^\d]', '', regex=True)
         total_cost = pd.to_numeric(numeric_costs, errors='coerce').sum()
@@ -486,22 +484,24 @@ with tab3:
         st.info("검색 결과와 일치하는 이력 장부가 없습니다.")
 
 # ==========================================
-# [4페이지] 월세 및 대출 상환 관리 (2단 매트릭스 뷰)
+# [4페이지] 월세 및 대출 상환 관리 (천 단위 자동 포맷 & 실시간 합산)
 # ==========================================
-with tab4:       
+with tab4:
+    st.header("💸 연도별 월세 수금 및 대출 상환 통합 장부")
+    
     if not contracts_df.empty:
         current_year = datetime.now().year
         selected_year = st.selectbox("📅 관리 연도 선택", options=list(range(current_year - 2, current_year + 3)), index=2, key="rent_year_select")
         
         # --- [상단 파트: 월세 수금 관리] ---
-        st.markdown("### 📋 월세 수금")
+        st.markdown("### 📋 월세 수금 장부")
         rent_data = []
         for idx, row in contracts_df.iterrows():
             b_name = row.get('건물명', '')
             r_num = row.get('호실', '')
             prop_cat = row.get('카테고리', '원룸')
             building_label = f"[{prop_cat}] {b_name} {r_num}"
-            rent_amount = row.get('월세(원)', '0')
+            rent_amount = format_currency(row.get('월세(원)', '0'))
             pay_day = row.get('납부일', '25일')
             
             row_dict = {
@@ -513,7 +513,9 @@ with tab4:
                 session_key = f"rent_{selected_year}_{b_name}_{r_num}_{m}"
                 if session_key not in st.session_state:
                     st.session_state[session_key] = ""
-                row_dict[f"{m}월"] = st.session_state[session_key]
+                # 저장된 값이 숫리면 천 단위 포맷 적용
+                val = st.session_state[session_key]
+                row_dict[f"{m}월"] = format_currency(val) if val else ""
                 
             rent_data.append(row_dict)
             
@@ -529,8 +531,8 @@ with tab4:
         
         # --- [하단 파트: 대출 상환 관리] ---
         st.markdown("---")
-        st.markdown("### 🏦 대출 상환")
-        st.markdown("💡 **tip:** 매월 대출상환금액을 입력하세요. 맨 우측 '합산' 및 맨 하단 '합산'은 자동으로 계산됩니다.")
+        st.markdown("### 🏦 대출 상환 장부")
+        st.markdown("💡 **tip:** 매월 대출상환금액을 입력하세요. 입력 즉시 천 단위 콤마가 적용되며, 우측 '합산' 및 하단 '합산' 행이 자동 계산됩니다.")
         
         loan_data = []
         total_loan_amount_val = 0
@@ -545,12 +547,7 @@ with tab4:
             
             raw_loan = row.get('대출금', '0')
             loan_amount_str = format_currency(raw_loan)
-            
-            clean_loan_num = 0
-            try:
-                clean_loan_num = int(re.sub(r'[^\d]', '', str(raw_loan)))
-            except:
-                pass
+            clean_loan_num = parse_int(raw_loan)
             total_loan_amount_val += clean_loan_num
             
             loan_pay_day = row.get('대출상환일', '15일')
@@ -566,15 +563,18 @@ with tab4:
                 if loan_session_key not in st.session_state:
                     st.session_state[loan_session_key] = ""
                 
-                val_str = str(st.session_state[loan_session_key])
-                row_dict[f"{m}월"] = val_str
+                # 에디터에서 입력된 값을 가져와서 실시간 천 단위 포맷팅 적용
+                raw_input_val = str(edited_loan_df.iloc[idx].get(f"{m}월", "") if 'loan_matrix_editor' in st.session_state else st.session_state[loan_session_key])
                 
-                try:
-                    c_val = int(re.sub(r'[^\d]', '', val_str)) if val_str else 0
-                    row_row_sum += c_val
-                    monthly_loan_totals[m] += c_val
-                except:
-                    pass
+                c_val = parse_int(raw_input_val)
+                row_row_sum += c_val
+                monthly_loan_totals[m] += c_val
+                
+                formatted_cell = f"{c_val:,}" if c_val > 0 else ""
+                row_dict[f"{m}월"] = formatted_cell
+                
+                # 세션 상태 갱신
+                st.session_state[loan_session_key] = formatted_cell
             
             row_dict["합산"] = f"{row_row_sum:,}" if row_row_sum > 0 else "0"
             grand_total_sum += row_row_sum
@@ -612,9 +612,9 @@ with tab4:
                 if not matched_row.empty:
                     for m in range(1, 13):
                         val = matched_row.iloc[0].get(f"{m}월", "")
-                        st.session_state[f"rent_{selected_year}_{b_name}_{r_num}_{m}"] = val
+                        st.session_state[f"rent_{selected_year}_{b_name}_{r_num}_{m}"] = format_currency(val) if val else ""
                         
-            # 대출 상환 저장 (마지막 합산 행 제외)
+            # 대출 상환 저장 (합산 행 제외)
             for idx, row in contracts_df.iterrows():
                 b_name = row.get('건물명', '')
                 r_num = row.get('호실', '')
@@ -624,7 +624,7 @@ with tab4:
                 if not matched_row.empty:
                     for m in range(1, 13):
                         val = matched_row.iloc[0].get(f"{m}월", "")
-                        st.session_state[f"loan_{selected_year}_{b_name}_{r_num}_{m}"] = val
+                        st.session_state[f"loan_{selected_year}_{b_name}_{r_num}_{m}"] = format_currency(val) if val else ""
                         
             st.success(f"{selected_year}년도 월세 및 대출 상환 장부가 안전하게 저장되었습니다!")
             st.rerun()
