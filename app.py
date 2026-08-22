@@ -542,8 +542,4 @@ with tab4:
                         st.session_state[session_key] = val
                         
             st.success(f"{selected_year}년도 월세 수금 장부가 안전하게 저장되었습니다!")
-            st.rerun()
-            
-    else:
-        st.info("등록된 계약 정보가 없습니다. 1페이지에서 계약을 먼저 등록해주세요.")
-)
+            )
