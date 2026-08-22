@@ -13,17 +13,18 @@ st.title("🏢 건물주 스마트 비서 (Pro Version)")
 # --- [UI 커스텀 CSS: 탭 글씨 크기 및 스타일 강화] ---
 st.markdown("""
     <style>
-    /* 탭 전체 컨테이너와 버튼의 글자 크기를 강제 조정 */
+    /* 탭 전체 컨테이너 높이와 폰트 크기 최적화 */
     button[data-baseweb="tab"] {
-        font-size: 100px !important; /* 원하시는 크기로 조정하세요 */
-        font-weight: bold !important;
-        padding: 15px 30px !important;
+        font-size: 24px !important;      /* 탭 글씨 크기 */
+        font-weight: 800 !important;     /* 탭 글씨 굵기 (굵게) */
+        padding: 20px 40px !important;   /* 터치하기 편하게 여백 확보 */
+        background-color: #f0f2f6;       /* 살짝 회색 배경으로 탭 구분 */
     }
     
-    /* 탭 내부에 있는 텍스트 요소가 있다면 같이 조정 */
-    button[data-baseweb="tab"] div p {
-        font-size: 24px !important;
-        font-weight: bold !important;
+    /* 선택된 탭의 강조 효과 */
+    button[data-baseweb="tab"][aria-selected="true"] {
+        color: #1f77b4 !important;       /* 선택된 탭의 글자색 */
+        border-bottom: 3px solid #1f77b4 !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -96,7 +97,7 @@ tab1, tab2, tab3 = st.tabs(["📋 임대 계약 및 관리", "💰 지출 및 �
 # [1페이지] 임대 계약 및 관리
 # ==========================================
 with tab1:
-    st.subheader("현재 임대 계약 현황 및 관리")
+    # st.subheader("현재 임대 계약 현황 및 관리") <-- 삭제됨
     
     if len(contracts_df) > 0 and "카테고리" in contracts_df.columns:
         category_counts = contracts_df["카테고리"].value_counts()
@@ -313,7 +314,9 @@ with tab1:
 # [2페이지] 지출 및 공사 장부
 # ==========================================
 with tab2:
-    st.subheader("💰 건물 유지보수 및 지출 장부")
+    # st.subheader("💰 건물 유지보수 및 지출 장부") <-- 삭제됨
+    # st.subheader 대신 마크다운으로 깔끔하게 처리하거나 바로 검색창 노출
+    st.markdown("### 💰 지출 내역 관리") # 서브헤더 대신 조금 작은 강조
     
     if st.session_state.get("clear_expense_input", False):
         st.session_state["del_e_input"] = ""
@@ -403,7 +406,7 @@ with tab2:
 # [3페이지] 지난 계약 및 매매 이력 장부
 # ==========================================
 with tab3:
-    st.subheader("📁 지난 계약 및 매매 이력 장부")
+    # st.subheader("📁 지난 계약 및 매매 이력 장부") <-- 삭제됨
     
     if st.session_state.get("clear_history_input", False):
         st.session_state["del_h_input"] = ""
