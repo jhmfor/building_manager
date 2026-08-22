@@ -106,7 +106,7 @@ contracts_df = load_contracts()
 expenses_df = load_expenses()
 history_df = load_history()
 
-tab1, tab2, tab3 = st.tabs(["📋 임대 계약 및 관리", "💰 지출 내역 관리", "📁 지난 계약 및 매매 관리"])
+tab1, tab2, tab3 = st.tabs(["📋 건 계약 및 관리", "💰 지출 내역 관리", "📁 지난 계약 및 매매 관리"])
 
 # ==========================================
 # [1페이지] 임대 계약 및 관리
@@ -124,7 +124,7 @@ with tab1:
             st.markdown(
                 f"""
                 <div style="background-color: #f8f9fa; padding: 10px 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e3e6f0; font-size: 0.95em;">
-                    📊 <b>보유 부동산 요약:</b> {badge_html}
+                    📊 <b>보유 건물:</b> {badge_html}
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -267,7 +267,7 @@ with tab1:
         st.info("클라우드에 등록된 계약 정보가 없습니다.")
     
     st.markdown("---")
-    st.markdown("#### ➕ 새로운 계약 등록 (클라우드 저장)")
+    st.markdown("#### ➕ 새 계약 등록 (클라우드 저장)")
     
     with st.form("contract_form_cloud", clear_on_submit=True):
         property_category = st.selectbox("부동산 카테고리 선택", ["아파트", "빌라", "원룸", "오피스텔", "단독주택", "상가"])
