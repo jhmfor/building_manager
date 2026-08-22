@@ -58,18 +58,21 @@ def load_contracts():
     res = supabase.table("contracts").select("*").execute()
     data = res.data
     if not data:
-        return pd.DataFrame(columns=["id", "건물명", "호실", "카테고리", "임차인", "임차인연락처", "부동산명", "부동산연락처", "보증금(원)", "월세(원)", "매수금", "대출금", "납부일", "계약일", "만료일", "특약사항", "상태"])
+        return pd.DataFrame(columns=["id", "건물명", "호실", "카테고리", "임차인", "임차인연락처", "부동산명", "부동산연락처", "보증금(원)", "월세(원)", "매수금", "대출금", "대출상환일", "납부일", "계약일", "만료일", "특약사항", "상태"])
     df = pd.DataFrame(data)
     rename_map = {
         "building_name": "건물명", "room_number": "호실", "property_type": "카테고리",
         "tenant_name": "임차인", "tenant_phone": "임차인연락처", "agency_name": "부동산명", 
         "agency_phone": "부동산연락처", "deposit_amount": "보증금(원)", "monthly_rent": "월세(원)", 
-        "purchase_price": "매수금", "loan_amount": "대출금",
+        "purchase_price": "매수금", "loan_amount": "대출금", "loan_pay_day": "대출상환일",
         "pay_day": "납부일", "start_date": "계약일", "end_date": "만료일", 
         "special_notes": "특약사항", "status": "상태"
     }
     if "property_type" not in df.columns:
         df["property_type"] = "원룸"
+    if "loan_pay_day" not in df.columns:
+        df["loan_pay_day"] = "매월 말일"
+        
     df = df.rename(columns=rename_map)
     
     for col in ["보증금(원)", "월세(원)", "매수금", "대출금"]:
@@ -89,7 +92,6 @@ def load_expenses():
     if "비용" in df.columns:
         df["비용"] = df["비용"].apply(format_currency)
     
-    # [컬럼 순서 재배치] '카테고리'를 '호실'과 '내역' 사이로 이동
     expected_cols = ["id", "날짜", "건물명", "호실", "카테고리", "내역", "비용"]
     existing_cols = [col for col in expected_cols if col in df.columns]
     for col in df.columns:
@@ -117,7 +119,7 @@ expenses_df = load_expenses()
 history_df = load_history()
 
 # 탭 4개 선언
-tab1, tab2, tab3, tab4 = st.tabs(["📋 건물 계약 및 관리", "💰 지출 내역 관리", "📁 지난 계약 및 매매 관리", "💸 월세 관리"])
+tab1, tab2, tab3, tab4 = st.tabs(["📋 건물 계약 및 관리", "💰 지출 내역 관리", "📁 지난 계약 및 매매 관리", "💸 월세 및 대출 관리"])
 
 # ==========================================
 # [1페이지] 임대 계약 및 관리
@@ -162,8 +164,9 @@ with tab1:
                 
                 purchase_val = format_currency(row.get('매수금', '0'))
                 loan_val = format_currency(row.get('대출금', '0'))
+                loan_pay_day = row.get('대출상환일', '미입력')
                 
-                st.markdown(f"🏷️ **매수금**: {purchase_val}원 &nbsp;|&nbsp; 🏦 **대출금**: {loan_val}원")
+                st.markdown(f"🏷️ **매수금**: {purchase_val}원 &nbsp;|&nbsp; 🏦 **대출금**: {loan_val}원 (상환일: **{loan_pay_day}**)")
                 st.markdown(f"💰 **보증금**: {deposit_val}원 &nbsp;|&nbsp; 💵 **월세**: {rent_val}원 (매월 **{pay_day}**)")
                 
                 t_name = row.get('임차인', '')
@@ -229,6 +232,7 @@ with tab1:
                             e_rent = st.text_input("월세", value=str(row.get('월세(원)', '')), key=f"erent_{row_id}")
                             e_purchase = st.text_input("매수금", value=str(row.get('매수금', '0')), key=f"epurchase_{row_id}")
                             e_loan = st.text_input("대출금", value=str(row.get('대출금', '0')), key=f"eloan_{row_id}")
+                            e_loan_pay_day = st.text_input("대출상환일", value=str(row.get('대출상환일', '15일')), key=f"eloanpay_{row_id}")
                             e_pay_day = st.text_input("월세 납부일", value=str(row.get('납부일', '')), key=f"epay_{row_id}")
                             e_special = st.text_area("특약 사항", value=str(row.get('특약사항', '')), key=f"espec_{row_id}")
                             
@@ -253,7 +257,7 @@ with tab1:
                                     "property_type": e_cat, "building_name": e_bname, "room_number": e_rname, 
                                     "tenant_name": e_tname, "tenant_phone": e_tphone, "agency_name": e_rename, 
                                     "agency_phone": e_rephone, "deposit_amount": e_deposit, "monthly_rent": e_rent, 
-                                    "purchase_price": e_purchase, "loan_amount": e_loan,
+                                    "purchase_price": e_purchase, "loan_amount": e_loan, "loan_pay_day": e_loan_pay_day,
                                     "pay_day": e_pay_day, "start_date": str(e_start_date), "end_date": str(e_end_date),
                                     "special_notes": e_special
                                 }
@@ -287,6 +291,8 @@ with tab1:
         purchase_val_input = c_p1.text_input("매수금 (원)", value="0")
         loan_val_input = c_p2.text_input("대출금 (원)", value="0")
         
+        loan_pay_day_input = st.text_input("대출상환일", value="15일", placeholder="예: 15일 또는 말일")
+        
         col3, col4 = st.columns(2)
         t_name = col3.text_input("임차인 이름", placeholder="예: 김세은")
         t_phone = col4.text_input("임차인 연락처", placeholder="예: 010-1234-5678")
@@ -319,7 +325,7 @@ with tab1:
                         "property_type": property_category, "building_name": b_name, "room_number": r_name, 
                         "tenant_name": t_name, "tenant_phone": t_phone, "agency_name": re_name, 
                         "agency_phone": re_phone, "deposit_amount": deposit_val_input, "monthly_rent": rent_val_input, 
-                        "purchase_price": purchase_val_input, "loan_amount": loan_val_input,
+                        "purchase_price": purchase_val_input, "loan_amount": loan_val_input, "loan_pay_day": loan_pay_day_input,
                         "pay_day": pay_day_input, "start_date": start_str, "end_date": end_str, 
                         "special_notes": special_input, "status": "계약중"
                     }).execute()
@@ -480,15 +486,17 @@ with tab3:
         st.info("검색 결과와 일치하는 이력 장부가 없습니다.")
 
 # ==========================================
-# [4페이지] 월세 관리 (연도별 매트릭스 뷰)
+# [4페이지] 월세 및 대출 상환 관리 (2단 매트릭스 뷰)
 # ==========================================
-with tab4:    
+with tab4:
+    st.header("💸 연도별 월세 수금 및 대출 상환 통합 장부")
+    
     if not contracts_df.empty:
-        # 1. 연도 선택 셀렉트박스
         current_year = datetime.now().year
         selected_year = st.selectbox("📅 관리 연도 선택", options=list(range(current_year - 2, current_year + 3)), index=2, key="rent_year_select")
         
-        # 2. 데이터프레임 구성 (건물명 + 호실, 월세금/일, 1~12월 매트릭스)
+        # --- [상단 파트: 월세 수금 관리] ---
+        st.markdown("### 📋 월세 수금 장부")
         rent_data = []
         for idx, row in contracts_df.iterrows():
             b_name = row.get('건물명', '')
@@ -499,8 +507,8 @@ with tab4:
             pay_day = row.get('납부일', '25일')
             
             row_dict = {
-                "건물명/호실": building_label,
-                "월세금/일": f"{rent_amount}원 ({pay_day})"
+                "건물명": building_label,
+                "월세금/일": f"{rent_amount}/{pay_day}"
             }
             
             for m in range(1, 13):
@@ -513,9 +521,6 @@ with tab4:
             
         rent_df = pd.DataFrame(rent_data)
         
-        st.markdown("💡 **사용 팁:** 표의 월별 칸을 클릭하여 **'입금완료'**, **'O'**, 또는 **금액/메모**를 직접 입력할 수 있습니다.")
-        
-        # 3. 엑셀 형태의 데이터 에디터 출력
         edited_rent_df = st.data_editor(
             rent_df,
             key="rent_matrix_editor",
@@ -524,21 +529,106 @@ with tab4:
             hide_index=True
         )
         
-        # 4. 수정 사항 저장 버튼
-        if st.button("💾 월세 수금표 일괄 저장", type="primary", key="save_rent_matrix"):
+        # --- [하단 파트: 대출 상환 관리] ---
+        st.markdown("---")
+        st.markdown("### 🏦 대출 상환 장부")
+        st.markdown("💡 **tip:** 매월 대출상환금액을 입력하세요. 맨 우측 '합산' 및 맨 하단 '합산'은 자동으로 계산됩니다.")
+        
+        loan_data = []
+        total_loan_amount_val = 0
+        monthly_loan_totals = {m: 0 for m in range(1, 13)}
+        grand_total_sum = 0
+        
+        for idx, row in contracts_df.iterrows():
+            b_name = row.get('건물명', '')
+            r_num = row.get('호실', '')
+            prop_cat = row.get('카테고리', '원룸')
+            building_label = f"[{prop_cat}] {b_name} {r_num}"
+            
+            raw_loan = row.get('대출금', '0')
+            loan_amount_str = format_currency(raw_loan)
+            
+            clean_loan_num = 0
+            try:
+                clean_loan_num = int(re.sub(r'[^\d]', '', str(raw_loan)))
+            except:
+                pass
+            total_loan_amount_val += clean_loan_num
+            
+            loan_pay_day = row.get('대출상환일', '15일')
+            
+            row_dict = {
+                "건물명": building_label,
+                "대출금/일": f"{loan_amount_str}/{loan_pay_day}"
+            }
+            
+            row_row_sum = 0
+            for m in range(1, 13):
+                loan_session_key = f"loan_{selected_year}_{b_name}_{r_num}_{m}"
+                if loan_session_key not in st.session_state:
+                    st.session_state[loan_session_key] = ""
+                
+                val_str = str(st.session_state[loan_session_key])
+                row_dict[f"{m}월"] = val_str
+                
+                try:
+                    c_val = int(re.sub(r'[^\d]', '', val_str)) if val_str else 0
+                    row_row_sum += c_val
+                    monthly_loan_totals[m] += c_val
+                except:
+                    pass
+            
+            row_dict["합산"] = f"{row_row_sum:,}" if row_row_sum > 0 else "0"
+            grand_total_sum += row_row_sum
+            loan_data.append(row_dict)
+            
+        # 하단 '합산' 총계 행 추가
+        total_row_dict = {
+            "건물명": "합산",
+            "대출금/일": f"{total_loan_amount_val:,}"
+        }
+        for m in range(1, 13):
+            total_row_dict[f"{m}월"] = f"{monthly_loan_totals[m]:,}" if monthly_loan_totals[m] > 0 else ""
+        total_row_dict["합산"] = f"{grand_total_sum:,}"
+        
+        loan_data.append(total_row_dict)
+        loan_df = pd.DataFrame(loan_data)
+        
+        edited_loan_df = st.data_editor(
+            loan_df,
+            key="loan_matrix_editor",
+            num_rows="fixed",
+            use_container_width=True,
+            hide_index=True
+        )
+        
+        # 저장 버튼
+        if st.button("💾 월세 및 대출 상환 장부 일괄 저장", type="primary", key="save_all_matrix"):
+            # 월세 저장
             for idx, row in contracts_df.iterrows():
                 b_name = row.get('건물명', '')
                 r_num = row.get('호실', '')
                 building_label = f"[{row.get('카테고리', '원룸')}] {b_name} {r_num}"
                 
-                matched_row = edited_rent_df[edited_rent_df["건물명/호실"] == building_label]
+                matched_row = edited_rent_df[edited_rent_df["건물명"] == building_label]
                 if not matched_row.empty:
                     for m in range(1, 13):
                         val = matched_row.iloc[0].get(f"{m}월", "")
-                        session_key = f"rent_{selected_year}_{b_name}_{r_num}_{m}"
-                        st.session_state[session_key] = val
+                        st.session_state[f"rent_{selected_year}_{b_name}_{r_num}_{m}"] = val
                         
-            st.success(f"{selected_year}년도 월세 수금 장부가 안전하게 저장되었습니다!")
+            # 대출 상환 저장 (마지막 합산 행 제외)
+            for idx, row in contracts_df.iterrows():
+                b_name = row.get('건물명', '')
+                r_num = row.get('호실', '')
+                building_label = f"[{row.get('카테고리', '원룸')}] {b_name} {r_num}"
+                
+                matched_row = edited_loan_df[edited_loan_df["건물명"] == building_label]
+                if not matched_row.empty:
+                    for m in range(1, 13):
+                        val = matched_row.iloc[0].get(f"{m}월", "")
+                        st.session_state[f"loan_{selected_year}_{b_name}_{r_num}_{m}"] = val
+                        
+            st.success(f"{selected_year}년도 월세 및 대출 상환 장부가 안전하게 저장되었습니다!")
             st.rerun()
             
     else:
