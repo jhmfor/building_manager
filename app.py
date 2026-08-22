@@ -126,7 +126,7 @@ with tab1:
             st.markdown(
                 f"""
                 <div style="background-color: #f8f9fa; padding: 10px 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e3e6f0; font-size: 0.95em;">
-                    📊 <b>보유 부동산 요약:</b> {badge_html}
+                    📊 <b>보유 부동산:</b> {badge_html}
                 </div>
                 """,
                 unsafe_allow_html=True
