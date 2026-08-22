@@ -480,15 +480,15 @@ with tab3:
         st.info("검색 결과와 일치하는 이력 장부가 없습니다.")
 
 # ==========================================
-# [4페이지] 월세 관리 (신규 연동)
+# [4페이지] 월세 관리 (연도별 매트릭스 뷰)
 # ==========================================
-with tab4:
+with tab4:    
     if not contracts_df.empty:
-        # 1. 연도 선택 셀렉트박스 (기본값: 2026년 또는 현재 연도)
+        # 1. 연도 선택 셀렉트박스
         current_year = datetime.now().year
         selected_year = st.selectbox("📅 관리 연도 선택", options=list(range(current_year - 2, current_year + 3)), index=2, key="rent_year_select")
         
-        # 2. 데이터프레임 구성 (건물명 + 호실, 월세금/일, 1~12월 컬럼)
+        # 2. 데이터프레임 구성 (건물명 + 호실, 월세금/일, 1~12월 매트릭스)
         rent_data = []
         for idx, row in contracts_df.iterrows():
             b_name = row.get('건물명', '')
@@ -498,16 +498,15 @@ with tab4:
             rent_amount = row.get('월세(원)', '0')
             pay_day = row.get('납부일', '25일')
             
-            # 기본 행 데이터 구조
             row_dict = {
                 "건물명/호실": building_label,
                 "월세금/일": f"{rent_amount}원 ({pay_day})"
             }
-            # 1월부터 12월까지 초기값 빈 문자열 또는 입금 상태 세션 연동
+            
             for m in range(1, 13):
                 session_key = f"rent_{selected_year}_{b_name}_{r_num}_{m}"
                 if session_key not in st.session_state:
-                    st.session_state[session_key] = "" # 초기엔 빈칸 (클릭하거나 입력 가능)
+                    st.session_state[session_key] = ""
                 row_dict[f"{m}월"] = st.session_state[session_key]
                 
             rent_data.append(row_dict)
@@ -527,13 +526,11 @@ with tab4:
         
         # 4. 수정 사항 저장 버튼
         if st.button("💾 월세 수금표 일괄 저장", type="primary", key="save_rent_matrix"):
-            # 에디터에서 수정된 값을 세션 스테이트에 영구 반영
             for idx, row in contracts_df.iterrows():
                 b_name = row.get('건물명', '')
                 r_num = row.get('호실', '')
                 building_label = f"[{row.get('카테고리', '원룸')}] {b_name} {r_num}"
                 
-                # 해당 행 찾기 일치화
                 matched_row = edited_rent_df[edited_rent_df["건물명/호실"] == building_label]
                 if not matched_row.empty:
                     for m in range(1, 13):
@@ -542,4 +539,26 @@ with tab4:
                         st.session_state[session_key] = val
                         
             st.success(f"{selected_year}년도 월세 수금 장부가 안전하게 저장되었습니다!")
-        )
+            st.rerun()
+            
+    else:
+        st.info("등록된 계약 정보가 없습니다. 1페이지에서 계약을 먼저 등록해주세요.")
+
+# 엑셀 다운로드 버튼
+def create_excel(df1, df2, df3):
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df1.to_excel(writer, index=False, sheet_name='건물 계약 및 관리')
+        df2.to_excel(writer, index=False, sheet_name='지출 내역 관리')
+        df3.to_excel(writer, index=False, sheet_name='지난 계약 및 매매 관리')
+    return output.getvalue()
+
+st.markdown("---")
+excel_file = create_excel(contracts_df, expenses_df, history_df)
+st.download_button(
+    label="📊 전체 세무 및 매매 장부 엑셀 다운로드 (.xlsx)",
+    data=excel_file,
+    file_name=f"건물종합관리장부_{datetime.now().strftime('%Y%m%d')}.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    use_container_width=True
+)
