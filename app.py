@@ -288,6 +288,12 @@ with tab1:
         deposit_val_input = r_col1.text_input("보증금", value="10,000,000")
         rent_val_input = r_col2.text_input("월세", value="500,000")
         pay_day_input = r_col3.text_input("월세 납부일", value="25일")
+
+        # --- 추가된 항목: 매수가 및 대출금 ---
+        c_col1, c_col2 = st.columns(2)
+        purchase_price_input = c_col1.text_input("매수가(원)", value="0")
+        loan_amount_input = c_col2.text_input("대출금(원)", value="0")
+        # ------------------------------------
         
         d_col1, d_col2 = st.columns(2)
         start_date = d_col1.date_input("계약 시작일")
@@ -303,20 +309,24 @@ with tab1:
                 start_str = start_date.strftime("%Y-%m-%d")
                 end_str = end_date.strftime("%Y-%m-%d")
                 
-                try:
+               try:
+                    # 1. contracts 테이블 저장
                     supabase.table("contracts").insert({
                         "property_type": property_category, "building_name": b_name, "room_number": r_name, 
                         "tenant_name": t_name, "tenant_phone": t_phone, "agency_name": re_name, 
                         "agency_phone": re_phone, "deposit_amount": deposit_val_input, "monthly_rent": rent_val_input, 
                         "pay_day": pay_day_input, "start_date": start_str, "end_date": end_str, 
-                        "special_notes": special_input, "status": "계약중"
+                        "special_notes": special_input, "status": "계약중",
+                        "purchase_price": purchase_price_input, "loan_amount": loan_amount_input # 추가 필드
                     }).execute()
                     
+                    # 2. history 테이블 저장
                     supabase.table("history").insert({
                         "building_name": f"[{property_category}] {b_name}", "room_number": r_name,
                         "contract_period": f"{start_str} ~ {end_str}",
                         "deposit": deposit_val_input, "rent": rent_val_input,
-                        "purchase_price": "0", "sale_price": "0"
+                        "purchase_price": purchase_price_input, # 3페이지로 연동
+                        "loan_amount": loan_amount_input       # 3페이지로 연동
                     }).execute()
                     
                     st.success("클라우드 서버에 안전하게 저장되었습니다!")
