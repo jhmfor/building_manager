@@ -106,7 +106,7 @@ contracts_df = load_contracts()
 expenses_df = load_expenses()
 history_df = load_history()
 
-tab1, tab2, tab3 = st.tabs(["📋 건 계약 및 관리", "💰 지출 내역 관리", "📁 지난 계약 및 매매 관리"])
+tab1, tab2, tab3 = st.tabs(["📋 건물 계약 및 관리", "💰 지출 내역 관리", "📁 지난 계약 및 매매 관리"])
 
 # ==========================================
 # [1페이지] 임대 계약 및 관리
