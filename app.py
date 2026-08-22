@@ -483,7 +483,7 @@ with tab3:
         st.info("검색 결과와 일치하는 이력 장부가 없습니다.")
 
 # ==========================================
-# [4페이지] 월세 및 대출 상환 관리 (천 단위 자동 포맷 & 실시간 합산)
+# [4페이지] 월세 및 대출 상환 관리 (실시간 콤마 변환 반영)
 # ==========================================
 with tab4:
     st.header("💸 연도별 월세 수금 및 대출 상환 통합 장부")
@@ -492,7 +492,7 @@ with tab4:
         current_year = datetime.now().year
         selected_year = st.selectbox("📅 관리 연도 선택", options=list(range(current_year - 2, current_year + 3)), index=2, key="rent_year_select")
         
-        # --- [상단 파트: 월세 수금 관리] ---
+        # --- [1. 월세 수금 장부] ---
         st.markdown("### 📋 월세 수금 장부")
         rent_data = []
         for idx, row in contracts_df.iterrows():
@@ -526,18 +526,31 @@ with tab4:
             hide_index=True
         )
         
-        # --- [하단 파트: 대출 상환 관리] ---
+        # 월세 에디터 실시간 세션 반영
+        if 'rent_matrix_editor' in st.session_state:
+            rent_edits = st.session_state['rent_matrix_editor'].get('edited_rows', {})
+            if rent_edits:
+                for row_idx_str, col_changes in rent_edits.items():
+                    r_idx = int(row_idx_str)
+                    if r_idx < len(contracts_df):
+                        row_info = contracts_df.iloc[r_idx]
+                        b_name = row_info.get('건물명', '')
+                        r_num = row_info.get('호실', '')
+                        for col_name, new_val in col_changes.items():
+                            if col_name.endswith("월"):
+                                session_key = f"rent_{selected_year}_{b_name}_{r_num}_{col_name.replace('월', '')}"
+                                st.session_state[session_key] = format_currency(new_val)
+
+        # --- [2. 대출 상환 장부] ---
         st.markdown("---")
         st.markdown("### 🏦 대출 상환 장부")
-        st.markdown("💡 **tip:** 매월 대출상환금액을 입력하세요. 입력 후 저장 버튼을 누르면 천 단위 콤마가 적용되며, 우측 '합산' 및 하단 '합산' 행이 자동 계산됩니다.")
+        st.markdown("💡 **tip:** 매월 대출상환금액을 입력하세요. 입력 즉시 천 단위 콤마가 적용되며, 우측 '합산' 및 하단 '합산' 행이 자동 계산됩니다.")
         
-        # 1단계: 에디터 직전 상태의 세션값들로부터 실시간 합산 매트릭스 구성
         loan_data = []
         total_loan_amount_val = 0
         monthly_loan_totals = {m: 0 for m in range(1, 13)}
         grand_total_sum = 0
         
-        # 임시 데이터프레임 빌드 (세션 상태 반영)
         temp_rows = []
         for idx, row in contracts_df.iterrows():
             b_name = row.get('건물명', '')
@@ -585,7 +598,6 @@ with tab4:
         
         loan_df = pd.DataFrame(temp_rows)
         
-        # 데이터 에디터 출력
         edited_loan_df = st.data_editor(
             loan_df,
             key="loan_matrix_editor",
@@ -594,36 +606,29 @@ with tab4:
             hide_index=True
         )
         
-        # 사용자가 에디터에 입력한 값을 실시간으로 세션에 동기화 및 콤마 포맷 적용
+        # [핵심 수정] 대출 상환 에디터에서 입력되는 순간 즉시 세션에 포맷 적용 후 반영
         if 'loan_matrix_editor' in st.session_state:
             edited_rows_dict = st.session_state['loan_matrix_editor'].get('edited_rows', {})
             if edited_rows_dict:
+                needs_rerun = False
                 for row_idx_str, col_changes in edited_rows_dict.items():
                     r_idx = int(row_idx_str)
-                    if r_idx < len(contracts_df): # 합산 행 제외
+                    if r_idx < len(contracts_df):
                         row_info = contracts_df.iloc[r_idx]
                         b_name = row_info.get('건물명', '')
                         r_num = row_info.get('호실', '')
                         for col_name, new_val in col_changes.items():
                             if col_name.endswith("월"):
                                 session_key = f"loan_{selected_year}_{b_name}_{r_num}_{col_name.replace('월', '')}"
-                                st.session_state[session_key] = format_currency(new_val)
+                                formatted_val = format_currency(new_val)
+                                if st.session_state.get(session_key) != formatted_val:
+                                    st.session_state[session_key] = formatted_val
+                                    needs_rerun = True
+                if needs_rerun:
+                    st.rerun()
 
         # 저장 버튼
         if st.button("💾 월세 및 대출 상환 장부 일괄 저장", type="primary", key="save_all_matrix"):
-            # 월세 저장
-            for idx, row in contracts_df.iterrows():
-                b_name = row.get('건물명', '')
-                r_num = row.get('호실', '')
-                building_label = f"[{row.get('카테고리', '원룸')}] {b_name} {r_num}"
-                
-                matched_row = edited_rent_df[edited_rent_df["건물명"] == building_label]
-                if not matched_row.empty:
-                    for m in range(1, 13):
-                        val = matched_row.iloc[0].get(f"{m}월", "")
-                        st.session_state[f"rent_{selected_year}_{b_name}_{r_num}_{m}"] = format_currency(val) if val else ""
-                        
-            # 대출 상환 저장 완료 갱신
             st.success(f"{selected_year}년도 월세 및 대출 상환 장부가 안전하게 저장되었습니다!")
             st.rerun()
             
