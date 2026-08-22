@@ -15,7 +15,7 @@ st.markdown("""
     <style>
     /* 탭(Tab) 라벨 글씨 크기 및 굵기 조정 */
     .stTabs [data-baseweb="tab"] p {
-        font-size: 18px !important;
+        font-size: 36px !important;
         font-weight: bold !important;
     }
     </style>
