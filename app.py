@@ -72,7 +72,6 @@ def load_contracts():
         df["property_type"] = "원룸"
     df = df.rename(columns=rename_map)
     
-    # 금액 컬럼 천 단위 콤마 자동 적용
     for col in ["보증금(원)", "월세(원)", "매수금", "대출금"]:
         if col in df.columns:
             df[col] = df[col].apply(format_currency)
@@ -89,7 +88,15 @@ def load_expenses():
     })
     if "비용" in df.columns:
         df["비용"] = df["비용"].apply(format_currency)
-    return df
+    
+    # [컬럼 순서 재배치] '카테고리'를 '호실'과 '내역' 사이로 이동
+    expected_cols = ["id", "날짜", "건물명", "호실", "카테고리", "내역", "비용"]
+    existing_cols = [col for col in expected_cols if col in df.columns]
+    # 누락된 기타 컬럼이 있다면 뒤에 붙여줌
+    for col in df.columns:
+        if col not in existing_cols:
+            existing_cols.append(col)
+    return df[existing_cols]
 
 def load_history():
     res = supabase.table("history").select("*").execute()
@@ -101,7 +108,6 @@ def load_history():
         "deposit": "보증금", "rent": "월세", "purchase_price": "매수가", "loan_amount": "대출금", "sale_price": "매도가"
     })
     
-    # 이력 장부의 금액/대출금 컬럼도 자동 콤마 포맷팅 적용
     for col in ["보증금", "월세", "매수가", "대출금", "매도가"]:
         if col in df.columns:
             df[col] = df[col].apply(format_currency)
@@ -154,7 +160,6 @@ with tab1:
                 rent_val = format_currency(row.get('월세(원)', '0'))
                 pay_day = row.get('납부일', '25일')
                 
-                # 매수금과 대출금을 윗줄에 배치하고 콤마 포맷팅 적용
                 purchase_val = format_currency(row.get('매수금', '0'))
                 loan_val = format_currency(row.get('대출금', '0'))
                 
