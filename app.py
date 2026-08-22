@@ -8,7 +8,7 @@ import re
 # 페이지 설정
 st.set_page_config(page_title="건물주 스마트 비서", page_icon="🏢", layout="centered")
 st.title("🏢 건물주 스마트 비서 (Pro Version)")
-st.markdown("임대 계약은 카드형 UI로, 2·3페이지 장부는 검색, 콤마 포맷팅, 그리고 한 줄 정렬된 삭제 기능이 적용되었습니다!")
+
 
 # --- 유틸리티 함수: 천 단위 콤마 자동 포맷팅 ---
 def format_currency(value):
@@ -302,9 +302,9 @@ with tab2:
                 st.rerun()
                 
         with col_e2_input:
-            del_e_id = st.text_input("삭제할 ID", placeholder="ID 번호 입력", key="del_e_input", label_visibility="collapsed")
+            del_e_id = st.text_input("삭제할 ID", placeholder="삭제할 ID 번호 입력", key="del_e_input", label_visibility="collapsed")
         with col_e2_btn:
-            if st.button("🗑️ 지출 삭제", use_container_width=True):
+            if st.button("🗑️ 삭제", use_container_width=True):
                 if del_e_id:
                     supabase.table("expenses").delete().eq("id", int(del_e_id)).execute()
                     st.warning(f"ID {del_e_id} 삭제됨")
@@ -370,9 +370,9 @@ with tab3:
                 st.rerun()
                 
         with col_h2_input:
-            del_h_id = st.text_input("삭제할 ID", placeholder="ID 번호 입력", key="del_h_input", label_visibility="collapsed")
+            del_h_id = st.text_input("삭제할 ID", placeholder="삭제할 ID 번호 입력", key="del_h_input", label_visibility="collapsed")
         with col_h2_btn:
-            if st.button("🗑️ 이력 삭제", use_container_width=True):
+            if st.button("🗑️ 삭제", use_container_width=True):
                 if del_h_id:
                     supabase.table("history").delete().eq("id", int(del_h_id)).execute()
                     st.warning(f"ID {del_h_id} 삭제됨")
