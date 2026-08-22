@@ -280,14 +280,15 @@ with tab1:
     with st.form("contract_form_cloud", clear_on_submit=True):
         property_category = st.selectbox("부동산 카테고리 선택", ["아파트", "빌라", "원룸", "오피스텔", "단독주택", "상가"])
         
+           
+        col1, col2 = st.columns(2)
+        b_name = col1.text_input("건물명", placeholder="예: 부산 센토빌")
+        r_name = col2.text_input("호실", placeholder="예: 302호")
+
         c_p1, c_p2 = st.columns(2)
         purchase_val_input = c_p1.text_input("매수금 (원)", value="0")
         loan_val_input = c_p2.text_input("대출금 (원)", value="0")
         
-        col1, col2 = st.columns(2)
-        b_name = col1.text_input("건물명", placeholder="예: 부산 센토빌")
-        r_name = col2.text_input("호실", placeholder="예: 302호")
-                       
         col3, col4 = st.columns(2)
         t_name = col3.text_input("임차인 이름", placeholder="예: 김세은")
         t_phone = col4.text_input("임차인 연락처", placeholder="예: 010-1234-5678")
