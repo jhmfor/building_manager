@@ -6,6 +6,15 @@ from supabase import create_client
 import json
 import re
 
+# [공통 유틸리티] 천 단위 콤마 자동 포맷팅 함수
+def format_currency(value):
+    try:
+        # 숫자만 남기고 나머지 제거 후 천 단위 콤마 삽입
+        clean_val = re.sub(r'[^\d]', '', str(value))
+        return f"{int(clean_val):,}" if clean_val else "0"
+    except:
+        return "0"
+        
 # 페이지 설정
 st.set_page_config(page_title="건물주 스마트 비서", page_icon="🏢", layout="centered")
 st.title("🏢 건물주 스마트 비서 (Pro Version)")
@@ -44,13 +53,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 유틸리티 함수: 천 단위 콤마 자동 포맷팅 ---
-def format_currency(value):
-    try:
-        clean_val = re.sub(r'[^\d]', '', str(value))
-        return f"{int(clean_val):,}" if clean_val else "0"
-    except:
-        return str(value)
 
 # 1. Supabase 클라우드 연결 설정
 @st.cache_resource
