@@ -8,7 +8,7 @@ import re
 # 페이지 설정
 st.set_page_config(page_title="건물주 스마트 비서", page_icon="🏢", layout="centered")
 st.title("🏢 건물주 스마트 비서 (Pro Version)")
-
+st.markdown("임대 계약은 카드형 UI로, 2·3페이지 장부는 검색, 콤마 포맷팅, 그리고 한 줄 정렬된 삭제 기능이 적용되었습니다!")
 
 # --- 유틸리티 함수: 천 단위 콤마 자동 포맷팅 ---
 def format_currency(value):
@@ -51,7 +51,6 @@ def load_expenses():
         "expense_date": "날짜", "building_name": "건물명", "room_number": "호실",
         "category": "카테고리", "description": "내역", "amount": "비용"
     })
-    # 비용 컬럼 천 단위 콤마 포맷팅 적용
     if "비용" in df.columns:
         df["비용"] = df["비용"].apply(format_currency)
     return df
@@ -245,7 +244,7 @@ with tab1:
                 st.rerun()
 
 # ==========================================
-# [2페이지] 지출 및 공사 장부 (검색 + 천 단위 콤마 + 총지출 + 표 수정)
+# [2페이지] 지출 및 공사 장부 (검색 + 천 단위 콤마 + 총지출 + 표 수정 + 한 줄 삭제)
 # ==========================================
 with tab2:
     st.subheader("💰 건물 유지보수 및 지출 장부")
@@ -283,9 +282,10 @@ with tab2:
             hide_index=True
         )
         
-        col_e1, col_e2 = st.columns(2)
+        # 일괄 저장 및 삭제 구역을 한 줄 배치(컬럼 비율 조정)로 최적화
+        col_e1, col_e2_input, col_e2_btn = st.columns([2, 2, 1])
         with col_e1:
-            if st.button("💾 지출 수정 사항 일괄 저장", type="primary"):
+            if st.button("💾 지출 수정 사항 일괄 저장", type="primary", use_container_width=True):
                 for _, row in edited_e_df.iterrows():
                     row_id = row.get("id")
                     if row_id:
@@ -301,12 +301,13 @@ with tab2:
                 st.success("지출 장부가 수정되었습니다!")
                 st.rerun()
                 
-        with col_e2:
-            del_e_id = st.text_input("삭제할 지출 ID 입력", placeholder="삭제할 항목의 id 번호 입력", key="del_e_input")
-            if st.button("🗑️ 해당 ID 지출 삭제"):
+        with col_e2_input:
+            del_e_id = st.text_input("삭제할 ID", placeholder="ID 번호 입력", key="del_e_input", label_visibility="collapsed")
+        with col_e2_btn:
+            if st.button("🗑️ 지출 삭제", use_container_width=True):
                 if del_e_id:
                     supabase.table("expenses").delete().eq("id", int(del_e_id)).execute()
-                    st.warning(f"ID {del_e_id} 지출이 삭제되었습니다.")
+                    st.warning(f"ID {del_e_id} 삭제됨")
                     st.rerun()
     else:
         st.info("조건에 맞는 지출 내역이 없습니다.")
@@ -329,7 +330,7 @@ with tab2:
                 st.rerun()
 
 # ==========================================
-# [3페이지] 지난 계약 및 매매 (검색 + 표 수정)
+# [3페이지] 지난 계약 및 매매 (검색 + 표 수정 + 한 줄 삭제)
 # ==========================================
 with tab3:
     st.subheader("📁 지난 계약 및 매매 이력 장부")
@@ -349,9 +350,10 @@ with tab3:
             hide_index=True
         )
         
-        col_h1, col_h2 = st.columns(2)
+        # 3페이지도 일괄 저장과 삭제 버튼을 한 줄로 나란히 배치
+        col_h1, col_h2_input, col_h2_btn = st.columns([2, 2, 1])
         with col_h1:
-            if st.button("💾 이력 수정 사항 일괄 저장", type="primary"):
+            if st.button("💾 이력 수정 사항 일괄 저장", type="primary", use_container_width=True):
                 for _, row in edited_h_df.iterrows():
                     row_id = row.get("id")
                     if row_id:
@@ -367,12 +369,13 @@ with tab3:
                 st.success("이력이 수정되었습니다!")
                 st.rerun()
                 
-        with col_h2:
-            del_h_id = st.text_input("삭제할 이력 ID 입력", placeholder="삭제할 항목의 id 번호 입력", key="del_h_input")
-            if st.button("🗑️ 해당 ID 이력 삭제"):
+        with col_h2_input:
+            del_h_id = st.text_input("삭제할 ID", placeholder="ID 번호 입력", key="del_h_input", label_visibility="collapsed")
+        with col_h2_btn:
+            if st.button("🗑️ 이력 삭제", use_container_width=True):
                 if del_h_id:
                     supabase.table("history").delete().eq("id", int(del_h_id)).execute()
-                    st.warning(f"ID {del_h_id} 이력이 삭제되었습니다.")
+                    st.warning(f"ID {del_h_id} 삭제됨")
                     st.rerun()
     else:
         st.info("검색 결과와 일치하는 이력 장부가 없습니다.")
