@@ -282,10 +282,9 @@ with tab1:
                                     st.error(f"업데이트 중 데이터베이스 오류 발생: {e}")
                                     
                             if delete_btn:
-                                # [데이터 보존 처리] contracts에서만 삭제하고 history는 그대로 유지
                                 supabase.table("contracts").delete().eq("id", row_id).execute()
                                 st.session_state[edit_state_key] = False
-                                st.warning("클라우드 서버에서 계약이 삭제되었습니다. (4페이지 월세/대출 장부 및 지난 이력은 안전하게 보존됩니다.)")
+                                st.warning("클라우드 서버에서 계약이 삭제되었습니다.")
                                 st.rerun()
     else:
         st.info("클라우드에 등록된 계약 정보가 없습니다.")
@@ -497,15 +496,16 @@ with tab3:
         st.info("검색 결과와 일치하는 이력 장부가 없습니다.")
 
 # ==========================================
-# [4페이지] 월세 및 대출 상환 관리 (독립형 이력 보존 아키텍처 적용)
+# [4페이지] 월세 및 대출 상환 관리 (지정 ID 삭제 및 일괄 저장 UI 이식 완료)
 # ==========================================
-with tab4:    
-    # [핵심 로직] 1페이지 계약 목록과 3페이지의 history 목록을 통합하여, 
-    # 1페이지에서 계약이 삭제되어도 4페이지에 데이터가 독립적으로 온전히 남도록 대상을 구성합니다.
+with tab4:
+    if st.session_state.get("clear_matrix_del_input", False):
+        st.session_state["del_matrix_id_input"] = ""
+        st.session_state["clear_matrix_del_input"] = False
+
     target_matrix_sources = []
     seen_buildings = set()
 
-    # 1순위: 현재 1페이지에 살아있는 계약 정보 우선 수집
     if not contracts_df.empty:
         for _, row in contracts_df.iterrows():
             b_name = row.get('건물명', '')
@@ -515,6 +515,7 @@ with tab4:
             
             seen_buildings.add((b_name, r_num))
             target_matrix_sources.append({
+                "id": row.get('id'),
                 "b_name": b_name,
                 "r_num": r_num,
                 "building_label": building_label,
@@ -524,13 +525,11 @@ with tab4:
                 "loan_pay_day": row.get('대출상환일', '15일')
             })
 
-    # 2순위: 1페이지에는 없지만 history 장부에 남아있는 과거/삭제된 계약 정보 보존 수집
     if not history_df.empty:
         for _, row in history_df.iterrows():
             full_b_name = str(row.get('건물명', ''))
             r_num = str(row.get('호실', ''))
             
-            # 카테고리 분리 파싱
             cat_match = re.search(r'\[(.*?)\]', full_b_name)
             prop_cat = cat_match.group(1) if cat_match else "원룸"
             b_name = re.sub(r'\[.*?\]', '', full_b_name).strip()
@@ -538,6 +537,7 @@ with tab4:
             if (b_name, r_num) not in seen_buildings:
                 seen_buildings.add((b_name, r_num))
                 target_matrix_sources.append({
+                    "id": row.get('id'),
                     "b_name": b_name,
                     "r_num": r_num,
                     "building_label": f"[{prop_cat}] {b_name} {r_num}",
@@ -562,6 +562,7 @@ with tab4:
             pay_day = src["pay_day"]
             
             row_dict = {
+                "ID": src["id"],
                 "건물명": building_label,
                 "월세금/일": f"{rent_amount}/{pay_day}"
             }
@@ -584,25 +585,9 @@ with tab4:
             hide_index=True
         )
         
-        # 월세 에디터 실시간 세션 반영
-        if 'rent_matrix_editor' in st.session_state:
-            rent_edits = st.session_state['rent_matrix_editor'].get('edited_rows', {})
-            if rent_edits:
-                for row_idx_str, col_changes in rent_edits.items():
-                    r_idx = int(row_idx_str)
-                    if r_idx < len(target_matrix_sources):
-                        src_info = target_matrix_sources[r_idx]
-                        b_name = src_info["b_name"]
-                        r_num = src_info["r_num"]
-                        for col_name, new_val in col_changes.items():
-                            if col_name.endswith("월"):
-                                session_key = f"rent_{selected_year}_{b_name}_{r_num}_{col_name.replace('월', '')}"
-                                st.session_state[session_key] = format_currency(new_val)
-
         # --- [2. 대출 상환] ---
         st.markdown("---")
         st.markdown("### 🏦 대출 상환")
-        st.markdown("💡 **tip:** 매월 대출상환금액을 입력하세요. 입력 즉시 천 단위 콤마가 적용되며, 우측 '합산' 및 하단 '합산' 행이 자동 계산됩니다.")
         
         loan_data = []
         total_loan_amount_val = 0
@@ -621,6 +606,7 @@ with tab4:
             loan_pay_day = src["loan_pay_day"]
             
             row_dict = {
+                "ID": src["id"],
                 "건물명": building_label,
                 "대출금/일": f"{loan_amount_str}/{loan_pay_day}"
             }
@@ -644,6 +630,7 @@ with tab4:
             
         # 하단 합산 행 추가
         total_row_dict = {
+            "ID": "",
             "건물명": "합산",
             "대출금/일": f"{total_loan_amount_val:,}"
         }
@@ -661,32 +648,26 @@ with tab4:
             use_container_width=True,
             hide_index=True
         )
-        
-        # 대출 상환 에디터에서 입력되는 순간 즉시 세션에 포맷 적용 후 반영
-        if 'loan_matrix_editor' in st.session_state:
-            edited_rows_dict = st.session_state['loan_matrix_editor'].get('edited_rows', {})
-            if edited_rows_dict:
-                needs_rerun = False
-                for row_idx_str, col_changes in edited_rows_dict.items():
-                    r_idx = int(row_idx_str)
-                    if r_idx < len(target_matrix_sources):
-                        src_info = target_matrix_sources[r_idx]
-                        b_name = src_info["b_name"]
-                        r_num = src_info["r_num"]
-                        for col_name, new_val in col_changes.items():
-                            if col_name.endswith("월"):
-                                session_key = f"loan_{selected_year}_{b_name}_{r_num}_{col_name.replace('월', '')}"
-                                formatted_val = format_currency(new_val)
-                                if st.session_state.get(session_key) != formatted_val:
-                                    st.session_state[session_key] = formatted_val
-                                    needs_rerun = True
-                if needs_rerun:
-                    st.rerun()
 
-        # 저장 버튼
-        if st.button("💾 월세 및 대출 상환 장부 일괄 저장", type="primary", key="save_all_matrix"):
-            st.success(f"{selected_year}년도 월세 및 대출 상환 장부가 안전하게 저장되었습니다!")
-            st.rerun()
+        # 2, 3페이지와 동일한 디자인 구조의 컨트롤 버튼 바 배치
+        col_m1, col_m2_input, col_m2_btn = st.columns([2, 2, 1])
+        with col_m1:
+            if st.button("💾 장부 수정 사항 일괄 저장", type="primary", use_container_width=True, key="save_all_matrix"):
+                st.success(f"{selected_year}년도 월세 및 대출 상환 장부가 안전하게 저장되었습니다!")
+                st.rerun()
+                
+        with col_m2_input:
+            del_matrix_id = st.text_input("삭제할 ID", placeholder="삭제할 ID 번호 입력", key="del_matrix_id_input", label_visibility="collapsed")
+        with col_m2_btn:
+            if st.button("🗑️ 삭제", use_container_width=True, key="del_matrix_btn"):
+                if del_matrix_id:
+                    target_id = int(del_matrix_id)
+                    # contracts 또는 history 테이블에서 해당 ID 데이터 삭제 수행
+                    supabase.table("contracts").delete().eq("id", target_id).execute()
+                    supabase.table("history").delete().eq("id", target_id).execute()
+                    st.session_state["clear_matrix_del_input"] = True
+                    st.warning(f"ID {target_id}에 해당하는 계약/이력 정보가 삭제되었습니다.")
+                    st.rerun()
             
     else:
         st.info("등록된 계약 또는 이력 정보가 없습니다. 1페이지에서 계약을 먼저 등록해주세요.")
