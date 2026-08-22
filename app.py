@@ -316,8 +316,7 @@ with tab1:
 with tab2:
     # st.subheader("💰 건물 유지보수 및 지출 장부") <-- 삭제됨
     # st.subheader 대신 마크다운으로 깔끔하게 처리하거나 바로 검색창 노출
-    st.markdown("### 💰 지출 내역 관리") # 서브헤더 대신 조금 작은 강조
-    
+        
     if st.session_state.get("clear_expense_input", False):
         st.session_state["del_e_input"] = ""
         st.session_state["clear_expense_input"] = False
