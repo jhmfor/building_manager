@@ -73,13 +73,14 @@ contracts_df = load_contracts()
 expenses_df = load_expenses()
 history_df = load_history()
 
-tab1, tab2, tab3 = st.subheader(["📋 임대 계약 및 관리", "💰 건물 유지보수 지출", "📁 지난 계약 및 매매 관리"])
+tab1, tab2, tab3 = st.tabs(["📋 임대 계약 및 관리", "💰 지출 및 공사 장부", "📁 지난 계약 및 매매 관리"])
 
 # ==========================================
 # [1페이지] 임대 계약 및 관리
 # ==========================================
 with tab1:
-        
+    st.subheader("현재 임대 계약 현황 및 관리")
+    
     if len(contracts_df) > 0 and "카테고리" in contracts_df.columns:
         category_counts = contracts_df["카테고리"].value_counts()
         summary_badges = []
@@ -292,10 +293,11 @@ with tab1:
                     st.error(f"저장 중 에러 발생: {e}")
 
 # ==========================================
-# [2페이지] 건물 유지보수 지출
+# [2페이지] 지출 및 공사 장부
 # ==========================================
 with tab2:
-       
+    st.subheader("💰 건물 유지보수 및 지출 장부")
+    
     if st.session_state.get("clear_expense_input", False):
         st.session_state["del_e_input"] = ""
         st.session_state["clear_expense_input"] = False
@@ -384,7 +386,8 @@ with tab2:
 # [3페이지] 지난 계약 및 매매 이력 장부
 # ==========================================
 with tab3:
-        
+    st.subheader("📁 지난 계약 및 매매 이력 장부")
+    
     if st.session_state.get("clear_history_input", False):
         st.session_state["del_h_input"] = ""
         st.session_state["clear_history_input"] = False
