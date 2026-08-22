@@ -53,16 +53,17 @@ def load_expenses():
         "expense_date": "날짜", "building_name": "건물명", "room_number": "호실",
         "category": "카테고리", "description": "내역", "amount": "비용(원)"
     }
-    return df.rename(columns=rename_map)
+    df = df.rename(columns=rename_map)
+    if "카테고리" not in df.columns:
+        df["카테고리"] = "기타"
+    return df
 
 def load_history():
     res = supabase.table("history").select("*").execute()
     data = res.data
     if not data:
-        return pd.DataFrame(columns=["건물명", "호실", "계약기간", "보증금", "월세", "매수가(원)", "매도가(원)"])
+        return pd.DataFrame(columns=["id", "건물명", "호실", "계약기간", "보증금", "월세", "매수가(원)", "매도가(원)"])
     df = pd.DataFrame(data)
-    if 'id' in df.columns:
-        df = df.drop(columns=['id'])
     rename_map = {
         "building_name": "건물명", "room_number": "호실", "contract_period": "계약기간", 
         "deposit": "보증금", "rent": "월세", "purchase_price": "매수가(원)", "sale_price": "매도가(원)"
@@ -136,20 +137,20 @@ with tab1:
                 if pd.notnull(special_note) and str(special_note).strip() != "":
                     st.info(f"📝 **특약 사항**: {special_note}")
                 
-                edit_state_key = f"is_editing_{row_id}"
+                edit_state_key = f"is_editing_contract_{row_id}"
                 if edit_state_key not in st.session_state:
                     st.session_state[edit_state_key] = False
                 
                 btn_col1, btn_col2 = st.columns([4, 1])
                 with btn_col2:
-                    if st.button("✏️ 수정/삭제", key=f"toggle_btn_{row_id}"):
+                    if st.button("✏️ 수정/삭제", key=f"toggle_contract_{row_id}"):
                         st.session_state[edit_state_key] = not st.session_state[edit_state_key]
                         st.rerun()
                 
                 if st.session_state[edit_state_key]:
                     with st.container(border=True):
-                        st.markdown(f"#### 🛠️ 클라우드 데이터 수정")
-                        with st.form(f"edit_form_{row_id}"):
+                        st.markdown(f"#### 🛠️ 임대 계약 데이터 수정")
+                        with st.form(f"edit_form_contract_{row_id}"):
                             e_bname = st.text_input("건물명", value=str(row.get('건물명', '')))
                             e_rname = st.text_input("호실", value=str(row.get('호실', '')))
                             e_tname = st.text_input("임차인 이름", value=str(row.get('임차인', '')))
@@ -254,7 +255,6 @@ with tab2:
     st.subheader("💰 건물 유지보수 및 지출 장부")
     
     current_expenses_df = expenses_df.copy()
-
     exp_search = st.text_input("🔍 지출 내역 검색", placeholder="건물명, 호실, 내역 또는 카테고리 검색", key="exp_search_input")
     
     display_expenses = current_expenses_df.copy()
@@ -278,11 +278,73 @@ with tab2:
         unsafe_allow_html=True
     )
     
+    # 지출 항목별 카드형 상세 수정/삭제 리스트 구현
     if not display_expenses.empty:
-        df_show = display_expenses.copy()
-        if "비용(원)" in df_show.columns:
-            df_show["비용(원)"] = df_show["비용(원)"].apply(format_currency)
-        st.dataframe(df_show, use_container_width=True, hide_index=True)
+        for idx, row in display_expenses.iterrows():
+            row_id = row.get('id')
+            with st.container(border=True):
+                c1, c2 = st.columns([3, 1])
+                with c1:
+                    st.markdown(f"**[{row.get('건물명', '')} {row.get('호실', '')}]** {row.get('내역', '')} ({row.get('날짜', '')})")
+                    st.markdown(f"🏷️ **{row.get('카테고리', '기타')}** | 💵 **{format_currency(row.get('비용(원)', 0))}원**")
+                with c2:
+                    edit_exp_key = f"is_editing_exp_{row_id}"
+                    if edit_exp_key not in st.session_state:
+                        st.session_state[edit_exp_key] = False
+                    if st.button("✏️ 수정/삭제", key=f"toggle_exp_{row_id}"):
+                        st.session_state[edit_exp_key] = not st.session_state[edit_exp_key]
+                        st.rerun()
+                
+                if st.session_state.get(edit_exp_key, False):
+                    with st.form(f"edit_form_exp_{row_id}"):
+                        st.markdown("#### 🛠️ 지출 내역 수정")
+                        e_bname = st.text_input("건물명", value=str(row.get('건물명', '')))
+                        e_rname = st.text_input("호실", value=str(row.get('호실', '')))
+                        e_cat = st.selectbox("카테고리", ["수리비", "공사비", "세금", "중개수수료", "기타"], index=0)
+                        e_desc = st.text_input("내역", value=str(row.get('내역', '')))
+                        e_amt = st.text_input("비용(원)", value=str(row.get('비용(원', '0')))
+                        
+                        try:
+                            default_edate = pd.to_datetime(row.get('날짜')).date()
+                        except:
+                            default_edate = datetime.today().date()
+                        e_date = st.date_input("날짜", value=default_edate)
+                        
+                        up_exp_btn = st.form_submit_button("수정 반영", type="primary")
+                        del_exp_btn = st.form_submit_button("지출 삭제")
+                        
+                        if up_exp_btn:
+                            clean_amt = "".join(filter(str.isdigit, str(e_amt)))
+                            update_payload = {
+                                "building_name": e_bname,
+                                "room_number": e_rname,
+                                "category": e_cat,
+                                "description": e_desc,
+                                "amount": clean_amt,
+                                "expense_date": str(e_date)
+                            }
+                            try:
+                                supabase.table("expenses").update(update_payload).eq("id", row_id).execute()
+                                st.session_state[edit_exp_key] = False
+                                st.success("지출 내역이 수정되었습니다!")
+                                st.rerun()
+                            except Exception as e:
+                                supabase.table("expenses").update({
+                                    "building_name": e_bname,
+                                    "room_number": e_rname,
+                                    "description": e_desc,
+                                    "amount": clean_amt,
+                                    "expense_date": str(e_date)
+                                }).eq("id", row_id).execute()
+                                st.session_state[edit_exp_key] = False
+                                st.success("지출 내역이 수정되었습니다!")
+                                st.rerun()
+                                
+                        if del_exp_btn:
+                            supabase.table("expenses").delete().eq("id", row_id).execute()
+                            st.session_state[edit_exp_key] = False
+                            st.warning("지출 내역이 삭제되었습니다.")
+                            st.rerun()
     else:
         st.info("조건에 맞는 지출 내역이 없습니다.")
         
@@ -321,7 +383,20 @@ with tab2:
                     st.success("클라우드에 안전하게 저장되었습니다!")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"데이터 저장 실패: {e}")
+                    # category 컬럼이 없는 구버전 테이블 호환용 예외 처리
+                    try:
+                        fallback_data = {
+                            "building_name": ex_bname,
+                            "room_number": ex_rname,
+                            "expense_date": str(ex_date),
+                            "description": f"[{ex_category}] {ex_desc}",
+                            "amount": clean_amount
+                        }
+                        supabase.table("expenses").insert(fallback_data).execute()
+                        st.success("클라우드에 안전하게 저장되었습니다!")
+                        st.rerun()
+                    except Exception as err:
+                        st.error(f"데이터 저장 실패: {err}")
 
 # ==========================================
 # [3페이지] 지난 계약 및 매매 관리 
@@ -335,15 +410,60 @@ with tab3:
         mask = filtered_history.apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)
         filtered_history = filtered_history[mask]
         
-    # 💡 지난 계약 및 매매 이력 장부 내 금액 필드(보증금, 월세, 매수가, 매도가) 자동 콤마 적용
+    # 지난 계약 및 매매 이력 리스트 카드별 수정/삭제 기능 구현
     if not filtered_history.empty:
-        history_show = filtered_history.copy()
-        for col in ["보증금", "월세", "매수가(원)", "매도가(원)"]:
-            if col in history_show.columns:
-                history_show[col] = history_show[col].apply(format_currency)
-        st.dataframe(history_show, use_container_width=True, hide_index=True)
+        for idx, row in filtered_history.iterrows():
+            row_id = row.get('id')
+            with st.container(border=True):
+                hc1, hc2 = st.columns([3, 1])
+                with hc1:
+                    st.markdown(f"### 📁 {row.get('건물명', '')} {row.get('호실', '')}")
+                    st.markdown(f"🗓️ **계약기간**: {row.get('계약기간', '')}")
+                    st.markdown(f"💰 **보증금**: {format_currency(row.get('보증금', 0))}원 | 💵 **월세**: {format_currency(row.get('월세', 0))}원")
+                    st.markdown(f"📈 **매수가**: {format_currency(row.get('매수가(원)', 0))}원 | 📉 **매도가**: {format_currency(row.get('매도가(원)', 0))}원")
+                with hc2:
+                    edit_hist_key = f"is_editing_hist_{row_id}"
+                    if edit_hist_key not in st.session_state:
+                        st.session_state[edit_hist_key] = False
+                    if st.button("✏️ 수정/삭제", key=f"toggle_hist_{row_id}"):
+                        st.session_state[edit_hist_key] = not st.session_state[edit_hist_key]
+                        st.rerun()
+                
+                if st.session_state.get(edit_hist_key, False):
+                    with st.form(f"edit_form_hist_{row_id}"):
+                        st.markdown("#### 🛠️ 이력 데이터 수정")
+                        h_bname = st.text_input("건물명", value=str(row.get('건물명', '')))
+                        h_rname = st.text_input("호실", value=str(row.get('호실', '')))
+                        h_period = st.text_input("계약기간", value=str(row.get('계약기간', '')))
+                        h_dep = st.text_input("보증금", value=str(row.get('보증금', '')))
+                        h_rent = st.text_input("월세", value=str(row.get('월세', '')))
+                        h_buy = st.text_input("매수가(원)", value=str(row.get('매수가(원)', '0')))
+                        h_sale = st.text_input("매도가(원)", value=str(row.get('매도가(원)', '0')))
+                        
+                        up_hist_btn = st.form_submit_button("이력 수정 반영", type="primary")
+                        del_hist_btn = st.form_submit_button("이력 삭제")
+                        
+                        if up_hist_btn:
+                            supabase.table("history").update({
+                                "building_name": h_bname,
+                                "room_number": h_rname,
+                                "contract_period": h_period,
+                                "deposit": h_dep,
+                                "rent": h_rent,
+                                "purchase_price": h_buy,
+                                "sale_price": h_sale
+                            }).eq("id", row_id).execute()
+                            st.session_state[edit_hist_key] = False
+                            st.success("이력 정보가 수정되었습니다!")
+                            st.rerun()
+                            
+                        if del_hist_btn:
+                            supabase.table("history").delete().eq("id", row_id).execute()
+                            st.session_state[edit_hist_key] = False
+                            st.warning("이력 정보가 삭제되었습니다.")
+                            st.rerun()
     else:
-        st.dataframe(filtered_history, use_container_width=True, hide_index=True)
+        st.info("등록된 지난 계약 및 매매 이력이 없습니다.")
     
     def create_excel(df1, df2, df3):
         output = BytesIO()
