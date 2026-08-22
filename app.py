@@ -41,7 +41,6 @@ def load_contracts():
         "pay_day": "납부일", "start_date": "계약일", "end_date": "만료일", 
         "special_notes": "특약사항", "status": "상태"
     }
-    # 기존 데이터에 카테고리 컬럼이 없을 경우를 대비한 안전 장치
     if "property_type" not in df.columns:
         df["property_type"] = "원룸"
     return df.rename(columns=rename_map)
@@ -76,12 +75,11 @@ history_df = load_history()
 tab1, tab2, tab3 = st.tabs(["📋 임대 계약 및 관리", "💰 지출 및 공사 장부", "📁 지난 계약 및 매매 관리"])
 
 # ==========================================
-# [1페이지] 임대 계약 및 관리 (카테고리 요약 배지 + 마스터 카드형 UI)
+# [1페이지] 임대 계약 및 관리
 # ==========================================
 with tab1:
     st.subheader("현재 임대 계약 현황 및 관리")
     
-    # 선택된 카테고리 항목 총 수량 요약 표시 (0개인 항목은 자동 제외)
     if len(contracts_df) > 0 and "카테고리" in contracts_df.columns:
         category_counts = contracts_df["카테고리"].value_counts()
         summary_badges = []
@@ -174,16 +172,17 @@ with tab1:
                             curr_cat = str(row.get('카테고리', '원룸'))
                             cat_index = categories.index(curr_cat) if curr_cat in categories else 2
                             
-                            e_cat = st.selectbox("카테고리 선택", categories, index=cat_index)
-                            e_bname = st.text_input("건물명", value=str(row.get('건물명', '')))
-                            e_rname = st.text_input("호실", value=str(row.get('호실', '')))
-                            e_tname = st.text_input("임차인 이름", value=str(row.get('임차인', '')))
-                            e_tphone = st.text_input("임차인 연락처", value=str(row.get('임차인연락처', '')))
-                            e_rename = st.text_input("부동산 이름", value=str(row.get('부동산명', '')))
-                            e_rephone = st.text_input("부동산 연락처", value=str(row.get('부동산연락처', '')))
-                            e_deposit = st.text_input("보증금", value=str(row.get('보증금(원)', '')))
-                            e_rent = st.text_input("월세", value=str(row.get('월세(원)', '')))
-                            e_pay_day = st.text_input("월세 납부일", value=str(row.get('납부일', '')))
+                            e_cat = st.selectbox("카테고리 선택", categories, index=cat_index, key=f"ecat_{row_id}")
+                            e_bname = st.text_input("건물명", value=str(row.get('건물명', '')), key=f"eb_{row_id}")
+                            e_rname = st.text_input("호실", value=str(row.get('호실', '')), key=f"er_{row_id}")
+                            e_tname = st.text_input("임차인 이름", value=str(row.get('임차인', '')), key=f"etn_{row_id}")
+                            e_tphone = st.text_input("임차인 연락처", value=str(row.get('임차인연락처', '')), key=f"etp_{row_id}")
+                            e_rename = st.text_input("부동산 이름", value=str(row.get('부동산명', '')), key=f"eran_{row_id}")
+                            e_rephone = st.text_input("부동산 연락처", value=str(row.get('부동산연락처', '')), key=f"erap_{row_id}")
+                            e_deposit = st.text_input("보증금", value=str(row.get('보증금(원)', '')), key=f"edep_{row_id}")
+                            e_rent = st.text_input("월세", value=str(row.get('월세(원)', '')), key=f"erent_{row_id}")
+                            e_pay_day = st.text_input("월세 납부일", value=str(row.get('납부일', '')), key=f"epay_{row_id}")
+                            e_special = st.text_area("특약 사항", value=str(row.get('특약사항', '')), key=f"espec_{row_id}")
                             
                             try:
                                 default_start = pd.to_datetime(start_d).date() if pd.notnull(start_d) and start_d != "" else datetime.today().date()
@@ -195,19 +194,30 @@ with tab1:
                             except:
                                 default_end = datetime.today().date()
 
-                            e_start_date = st.date_input("계약 시작일 수정", value=default_start)
-                            e_end_date = st.date_input("계약 만료일 수정", value=default_end)
+                            e_start_date = st.date_input("계약 시작일 수정", value=default_start, key=f"estart_{row_id}")
+                            e_end_date = st.date_input("계약 만료일 수정", value=default_end, key=f"eend_{row_id}")
                             
                             update_btn = st.form_submit_button("클라우드에 수정 반영", type="primary")
                             delete_btn = st.form_submit_button("클라우드에서 계약 삭제")
                             
                             if update_btn:
-                                supabase.table("contracts").update({
-                                    "property_type": e_cat, "building_name": e_bname, "room_number": e_rname, 
-                                    "tenant_name": e_tname, "tenant_phone": e_tphone, "agency_name": e_rename, 
-                                    "agency_phone": e_rephone, "deposit_amount": e_deposit, "monthly_rent": e_rent, 
-                                    "pay_day": e_pay_day, "start_date": str(e_start_date), "end_date": str(e_end_date)
-                                }).eq("id", row_id).execute()
+                                # Supabase 컬럼 매핑에 맞춰 정확한 키값으로 업데이트 전송
+                                update_payload = {
+                                    "property_type": e_cat, 
+                                    "building_name": e_bname, 
+                                    "room_number": e_rname, 
+                                    "tenant_name": e_tname, 
+                                    "tenant_phone": e_tphone, 
+                                    "agency_name": e_rename, 
+                                    "agency_phone": e_rephone, 
+                                    "deposit_amount": e_deposit, 
+                                    "monthly_rent": e_rent, 
+                                    "pay_day": e_pay_day, 
+                                    "start_date": str(e_start_date), 
+                                    "end_date": str(e_end_date),
+                                    "special_notes": e_special
+                                }
+                                supabase.table("contracts").update(update_payload).eq("id", row_id).execute()
                                 st.session_state[edit_state_key] = False
                                 st.success("클라우드 서버에 수정 사항이 반영되었습니다!")
                                 st.rerun()
