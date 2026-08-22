@@ -15,8 +15,8 @@ st.markdown("""
     <style>
     /* 1. 탭 스타일: 매우 크고 굵게 */
     button[data-baseweb="tab"] {
-        font-size: 22px !important;      
-        font-weight: 900 !important;     
+        font-size: 30px !important;      
+        font-weight: 1200 !important;     
         padding: 20px 40px !important;   
     }
     
