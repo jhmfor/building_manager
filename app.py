@@ -10,12 +10,19 @@ import re
 st.set_page_config(page_title="건물주 스마트 비서", page_icon="🏢", layout="centered")
 st.title("🏢 건물주 스마트 비서 (Pro Version)")
 
-# --- [UI 커스텀 CSS: 탭 글씨 크기 키우기] ---
+# --- [UI 커스텀 CSS: 탭 글씨 크기 및 스타일 강화] ---
 st.markdown("""
     <style>
-    /* 탭(Tab) 라벨 글씨 크기 및 굵기 조정 */
-    .stTabs [data-baseweb="tab"] p {
-        font-size: 36px !important;
+    /* 탭 전체 컨테이너와 버튼의 글자 크기를 강제 조정 */
+    button[data-baseweb="tab"] {
+        font-size: 24px !important; /* 원하시는 크기로 조정하세요 */
+        font-weight: bold !important;
+        padding: 15px 30px !important;
+    }
+    
+    /* 탭 내부에 있는 텍스트 요소가 있다면 같이 조정 */
+    button[data-baseweb="tab"] div p {
+        font-size: 24px !important;
         font-weight: bold !important;
     }
     </style>
