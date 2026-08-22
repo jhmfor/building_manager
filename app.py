@@ -212,7 +212,6 @@ with tab1:
                         st.session_state[edit_state_key] = not st.session_state[edit_state_key]
                         st.rerun()
                 
-                # [수정 완료] 신규 등록 폼과 동일하게 2단 그리드로 깔끔하게 정돈된 수정/삭제 영역
                 if st.session_state[edit_state_key]:
                     with st.container(border=True):
                         st.markdown(f"#### 🛠️ 임대 계약 데이터 수정")
@@ -283,10 +282,10 @@ with tab1:
                                     st.error(f"업데이트 중 데이터베이스 오류 발생: {e}")
                                     
                             if delete_btn:
-                                # [핵심 보완] 계약 삭제 시 contracts 테이블만 삭제하고 history(3페이지 및 4페이지 연동 베이스)는 건드리지 않음
+                                # [데이터 보존 처리] contracts에서만 삭제하고 history는 그대로 유지
                                 supabase.table("contracts").delete().eq("id", row_id).execute()
                                 st.session_state[edit_state_key] = False
-                                st.warning("클라우드 서버에서 계약이 삭제되었습니다. (기존 월세/매매 이력은 안전하게 보존됩니다.)")
+                                st.warning("클라우드 서버에서 계약이 삭제되었습니다. (4페이지 월세/대출 장부 및 지난 이력은 안전하게 보존됩니다.)")
                                 st.rerun()
     else:
         st.info("클라우드에 등록된 계약 정보가 없습니다.")
@@ -498,23 +497,69 @@ with tab3:
         st.info("검색 결과와 일치하는 이력 장부가 없습니다.")
 
 # ==========================================
-# [4페이지] 월세 및 대출 상환 관리 (실시간 콤마 변환 반영)
+# [4페이지] 월세 및 대출 상환 관리 (독립형 이력 보존 아키텍처 적용)
 # ==========================================
 with tab4:    
+    # [핵심 로직] 1페이지 계약 목록과 3페이지의 history 목록을 통합하여, 
+    # 1페이지에서 계약이 삭제되어도 4페이지에 데이터가 독립적으로 온전히 남도록 대상을 구성합니다.
+    target_matrix_sources = []
+    seen_buildings = set()
+
+    # 1순위: 현재 1페이지에 살아있는 계약 정보 우선 수집
     if not contracts_df.empty:
+        for _, row in contracts_df.iterrows():
+            b_name = row.get('건물명', '')
+            r_num = row.get('호실', '')
+            prop_cat = row.get('카테고리', '원룸')
+            building_label = f"[{prop_cat}] {b_name} {r_num}"
+            
+            seen_buildings.add((b_name, r_num))
+            target_matrix_sources.append({
+                "b_name": b_name,
+                "r_num": r_num,
+                "building_label": building_label,
+                "rent": format_currency(row.get('월세(원)', '0')),
+                "pay_day": row.get('납부일', '25일'),
+                "loan": parse_int(row.get('대출금', '0')),
+                "loan_pay_day": row.get('대출상환일', '15일')
+            })
+
+    # 2순위: 1페이지에는 없지만 history 장부에 남아있는 과거/삭제된 계약 정보 보존 수집
+    if not history_df.empty:
+        for _, row in history_df.iterrows():
+            full_b_name = str(row.get('건물명', ''))
+            r_num = str(row.get('호실', ''))
+            
+            # 카테고리 분리 파싱
+            cat_match = re.search(r'\[(.*?)\]', full_b_name)
+            prop_cat = cat_match.group(1) if cat_match else "원룸"
+            b_name = re.sub(r'\[.*?\]', '', full_b_name).strip()
+            
+            if (b_name, r_num) not in seen_buildings:
+                seen_buildings.add((b_name, r_num))
+                target_matrix_sources.append({
+                    "b_name": b_name,
+                    "r_num": r_num,
+                    "building_label": f"[{prop_cat}] {b_name} {r_num}",
+                    "rent": format_currency(row.get('월세', '0')),
+                    "pay_day": "25일",
+                    "loan": parse_int(row.get('대출금', '0')),
+                    "loan_pay_day": "15일"
+                })
+
+    if len(target_matrix_sources) > 0:
         current_year = datetime.now().year
         selected_year = st.selectbox("📅 관리 연도 선택", options=list(range(current_year - 2, current_year + 3)), index=2, key="rent_year_select")
         
         # --- [1. 월세 수금 장부] ---
         st.markdown("### 📋 월세 수금")
         rent_data = []
-        for idx, row in contracts_df.iterrows():
-            b_name = row.get('건물명', '')
-            r_num = row.get('호실', '')
-            prop_cat = row.get('카테고리', '원룸')
-            building_label = f"[{prop_cat}] {b_name} {r_num}"
-            rent_amount = format_currency(row.get('월세(원)', '0'))
-            pay_day = row.get('납부일', '25일')
+        for src in target_matrix_sources:
+            b_name = src["b_name"]
+            r_num = src["r_num"]
+            building_label = src["building_label"]
+            rent_amount = src["rent"]
+            pay_day = src["pay_day"]
             
             row_dict = {
                 "건물명": building_label,
@@ -545,10 +590,10 @@ with tab4:
             if rent_edits:
                 for row_idx_str, col_changes in rent_edits.items():
                     r_idx = int(row_idx_str)
-                    if r_idx < len(contracts_df):
-                        row_info = contracts_df.iloc[r_idx]
-                        b_name = row_info.get('건물명', '')
-                        r_num = row_info.get('호실', '')
+                    if r_idx < len(target_matrix_sources):
+                        src_info = target_matrix_sources[r_idx]
+                        b_name = src_info["b_name"]
+                        r_num = src_info["r_num"]
                         for col_name, new_val in col_changes.items():
                             if col_name.endswith("월"):
                                 session_key = f"rent_{selected_year}_{b_name}_{r_num}_{col_name.replace('월', '')}"
@@ -565,17 +610,15 @@ with tab4:
         grand_total_sum = 0
         
         temp_rows = []
-        for idx, row in contracts_df.iterrows():
-            b_name = row.get('건물명', '')
-            r_num = row.get('호실', '')
-            prop_cat = row.get('카테고리', '원룸')
-            building_label = f"[{prop_cat}] {b_name} {r_num}"
+        for src in target_matrix_sources:
+            b_name = src["b_name"]
+            r_num = src["r_num"]
+            building_label = src["building_label"]
             
-            raw_loan = row.get('대출금', '0')
-            clean_loan_num = parse_int(raw_loan)
+            clean_loan_num = src["loan"]
             total_loan_amount_val += clean_loan_num
             loan_amount_str = f"{clean_loan_num:,}" if clean_loan_num > 0 else "0"
-            loan_pay_day = row.get('대출상환일', '15일')
+            loan_pay_day = src["loan_pay_day"]
             
             row_dict = {
                 "건물명": building_label,
@@ -626,10 +669,10 @@ with tab4:
                 needs_rerun = False
                 for row_idx_str, col_changes in edited_rows_dict.items():
                     r_idx = int(row_idx_str)
-                    if r_idx < len(contracts_df):
-                        row_info = contracts_df.iloc[r_idx]
-                        b_name = row_info.get('건물명', '')
-                        r_num = row_info.get('호실', '')
+                    if r_idx < len(target_matrix_sources):
+                        src_info = target_matrix_sources[r_idx]
+                        b_name = src_info["b_name"]
+                        r_num = src_info["r_num"]
                         for col_name, new_val in col_changes.items():
                             if col_name.endswith("월"):
                                 session_key = f"loan_{selected_year}_{b_name}_{r_num}_{col_name.replace('월', '')}"
@@ -646,7 +689,7 @@ with tab4:
             st.rerun()
             
     else:
-        st.info("등록된 계약 정보가 없습니다. 1페이지에서 계약을 먼저 등록해주세요.")
+        st.info("등록된 계약 또는 이력 정보가 없습니다. 1페이지에서 계약을 먼저 등록해주세요.")
 
 # 엑셀 다운로드 버튼
 def create_excel(df1, df2, df3):
