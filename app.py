@@ -13,18 +13,33 @@ st.title("🏢 건물주 스마트 비서 (Pro Version)")
 # --- [UI 커스텀 CSS: 탭 글씨 크기 및 스타일 강화] ---
 st.markdown("""
     <style>
-    /* 탭 전체 컨테이너 높이와 폰트 크기 최적화 */
+    /* 1. 탭 스타일: 매우 크고 굵게 */
     button[data-baseweb="tab"] {
-        font-size: 24px !important;      /* 탭 글씨 크기 */
-        font-weight: 800 !important;     /* 탭 글씨 굵기 (굵게) */
-        padding: 20px 40px !important;   /* 터치하기 편하게 여백 확보 */
-        background-color: #f0f2f6;       /* 살짝 회색 배경으로 탭 구분 */
+        font-size: 22px !important;      
+        font-weight: 900 !important;     
+        padding: 20px 40px !important;   
     }
     
-    /* 선택된 탭의 강조 효과 */
-    button[data-baseweb="tab"][aria-selected="true"] {
-        color: #1f77b4 !important;       /* 선택된 탭의 글자색 */
-        border-bottom: 3px solid #1f77b4 !important;
+    /* 2. 폼 라벨(항목 이름): 굵고 눈에 띄게 */
+    label {
+        font-size: 18px !important;
+        font-weight: 800 !important;
+        color: #2c3e50 !important;
+    }
+    
+    /* 3. 입력창(Text Input) 내부 글씨 크기 조정 */
+    input {
+        font-size: 16px !important;
+    }
+    
+    /* 4. 데이터 에디터 폰트 키우기 */
+    [data-testid="stDataFrame"] {
+        font-size: 16px !important;
+    }
+    
+    /* 5. 마크다운 내 강조 텍스트(항목) 키우기 */
+    b, strong {
+        font-size: 17px !important;
     }
     </style>
 """, unsafe_allow_html=True)
