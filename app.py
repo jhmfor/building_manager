@@ -85,7 +85,6 @@ with tab1:
         for idx, row in contracts_df.iterrows():
             row_id = row.get('id')
             
-            # 💡 계약 만료일 자동 판별 로직 추가
             end_d_str = row.get('만료일', '1900-01-01')
             try:
                 end_date_obj = pd.to_datetime(end_d_str)
@@ -98,7 +97,6 @@ with tab1:
                 with col_t1:
                     st.markdown(f"### 🏢 {row.get('건물명', '')} {row.get('호실', '')}")
                 with col_t2:
-                    # 만료일이 지났다면 무조건 강제로 '계약만료(빨간색)' 표시
                     if is_expired:
                         st.markdown("🔴 **계약만료**")
                     else:
@@ -110,7 +108,6 @@ with tab1:
                         else:
                             st.markdown(f"🔴 **{status_badge}**")
                 
-                # 💡 금액 천 단위 콤마 자동 적용
                 deposit_val = format_currency(row.get('보증금(원)', '0'))
                 rent_val = format_currency(row.get('월세(원)', '0'))
                 pay_day = row.get('납부일', '25일')
@@ -282,7 +279,6 @@ with tab2:
     )
     
     if not display_expenses.empty:
-        # 데이터프레임 출력 전 금액 콤마 포맷팅 적용
         df_show = display_expenses.copy()
         if "비용(원)" in df_show.columns:
             df_show["비용(원)"] = df_show["비용(원)"].apply(format_currency)
@@ -334,13 +330,20 @@ with tab3:
     st.subheader("📁 지난 계약 및 매매 이력 장부")
     search_query = st.text_input("🔍 항목별 검색", placeholder="검색어를 입력하세요", key="history_search")
     
-    if search_query and len(history_df) > 0:
-        mask = history_df.apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)
-        filtered_history = history_df[mask]
-    else:
-        filtered_history = history_df
+    filtered_history = history_df.copy()
+    if search_query and len(filtered_history) > 0:
+        mask = filtered_history.apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)
+        filtered_history = filtered_history[mask]
         
-    st.dataframe(filtered_history, use_container_width=True, hide_index=True)
+    # 💡 지난 계약 및 매매 이력 장부 내 금액 필드(보증금, 월세, 매수가, 매도가) 자동 콤마 적용
+    if not filtered_history.empty:
+        history_show = filtered_history.copy()
+        for col in ["보증금", "월세", "매수가(원)", "매도가(원)"]:
+            if col in history_show.columns:
+                history_show[col] = history_show[col].apply(format_currency)
+        st.dataframe(history_show, use_container_width=True, hide_index=True)
+    else:
+        st.dataframe(filtered_history, use_container_width=True, hide_index=True)
     
     def create_excel(df1, df2, df3):
         output = BytesIO()
