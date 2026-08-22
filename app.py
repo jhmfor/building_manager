@@ -13,7 +13,7 @@ st.title("🏢 건물주 스마트 비서 (Pro Version)")
 st.markdown("""
     <style>
     button[data-baseweb="tab"] {
-        font-size: 26px !important;      
+        font-size: 26px !important;    
         font-weight: 1200 !important;     
         padding: 15px 30px !important;   
     }
@@ -212,6 +212,7 @@ with tab1:
                         st.session_state[edit_state_key] = not st.session_state[edit_state_key]
                         st.rerun()
                 
+                # [수정 완료] 신규 등록 폼과 동일하게 2단 그리드로 깔끔하게 정돈된 수정/삭제 영역
                 if st.session_state[edit_state_key]:
                     with st.container(border=True):
                         st.markdown(f"#### 🛠️ 임대 계약 데이터 수정")
@@ -220,20 +221,30 @@ with tab1:
                             curr_cat = str(row.get('카테고리', '원룸'))
                             cat_index = categories.index(curr_cat) if curr_cat in categories else 2
                             
-                            e_cat = st.selectbox("카테고리 선택", categories, index=cat_index, key=f"ecat_{row_id}")
-                            e_bname = st.text_input("건물명", value=str(row.get('건물명', '')), key=f"eb_{row_id}")
-                            e_rname = st.text_input("호실", value=str(row.get('호실', '')), key=f"er_{row_id}")
-                            e_tname = st.text_input("임차인 이름", value=str(row.get('임차인', '')), key=f"etn_{row_id}")
-                            e_tphone = st.text_input("임차인 연락처", value=str(row.get('임차인연락처', '')), key=f"etp_{row_id}")
-                            e_rename = st.text_input("부동산 이름", value=str(row.get('부동산명', '')), key=f"eran_{row_id}")
-                            e_rephone = st.text_input("부동산 연락처", value=str(row.get('부동산연락처', '')), key=f"erap_{row_id}")
-                            e_deposit = st.text_input("보증금", value=str(row.get('보증금(원)', '')), key=f"edep_{row_id}")
-                            e_rent = st.text_input("월세", value=str(row.get('월세(원)', '')), key=f"erent_{row_id}")
-                            e_purchase = st.text_input("매수금", value=str(row.get('매수금', '0')), key=f"epurchase_{row_id}")
-                            e_loan = st.text_input("대출금", value=str(row.get('대출금', '0')), key=f"eloan_{row_id}")
+                            e_cat = st.selectbox("부동산 카테고리 선택", categories, index=cat_index, key=f"ecat_{row_id}")
+                            
+                            ec1, ec2 = st.columns(2)
+                            e_bname = ec1.text_input("건물명", value=str(row.get('건물명', '')), key=f"eb_{row_id}")
+                            e_rname = ec2.text_input("호실", value=str(row.get('호실', '')), key=f"er_{row_id}")
+                            
+                            ec3, ec4 = st.columns(2)
+                            e_purchase = ec3.text_input("매수금 (원)", value=str(row.get('매수금', '0')), key=f"epurchase_{row_id}")
+                            e_loan = ec4.text_input("대출금 (원)", value=str(row.get('대출금', '0')), key=f"eloan_{row_id}")
+                            
                             e_loan_pay_day = st.text_input("대출상환일", value=str(row.get('대출상환일', '15일')), key=f"eloanpay_{row_id}")
-                            e_pay_day = st.text_input("월세 납부일", value=str(row.get('납부일', '')), key=f"epay_{row_id}")
-                            e_special = st.text_area("특약 사항", value=str(row.get('특약사항', '')), key=f"espec_{row_id}")
+                            
+                            ec5, ec6 = st.columns(2)
+                            e_tname = ec5.text_input("임차인 이름", value=str(row.get('임차인', '')), key=f"etn_{row_id}")
+                            e_tphone = ec6.text_input("임차인 연락처", value=str(row.get('임차인연락처', '')), key=f"etp_{row_id}")
+                            
+                            ec7, ec8 = st.columns(2)
+                            e_rename = ec7.text_input("부동산 이름", value=str(row.get('부동산명', '')), key=f"eran_{row_id}")
+                            e_rephone = ec8.text_input("부동산 연락처", value=str(row.get('부동산연락처', '')), key=f"erap_{row_id}")
+                            
+                            ec9, ec10, ec11 = st.columns(3)
+                            e_deposit = ec9.text_input("보증금", value=str(row.get('보증금(원)', '')), key=f"edep_{row_id}")
+                            e_rent = ec10.text_input("월세", value=str(row.get('월세(원)', '')), key=f"erent_{row_id}")
+                            e_pay_day = ec11.text_input("월세 납부일", value=str(row.get('납부일', '')), key=f"epay_{row_id}")
                             
                             try:
                                 default_start = pd.to_datetime(start_d).date() if pd.notnull(start_d) and start_d != "" else datetime.today().date()
@@ -245,8 +256,11 @@ with tab1:
                             except:
                                 default_end = datetime.today().date()
 
-                            e_start_date = st.date_input("계약 시작일 수정", value=default_start, key=f"estart_{row_id}")
-                            e_end_date = st.date_input("계약 만료일 수정", value=default_end, key=f"eend_{row_id}")
+                            ed_c1, ed_c2 = st.columns(2)
+                            e_start_date = ed_c1.date_input("계약 시작일 수정", value=default_start, key=f"estart_{row_id}")
+                            e_end_date = ed_c2.date_input("계약 만료일 수정", value=default_end, key=f"eend_{row_id}")
+                            
+                            e_special = st.text_area("특약 사항 (선택 입력)", value=str(row.get('특약사항', '')), key=f"espec_{row_id}")
                             
                             update_btn = st.form_submit_button("클라우드에 수정 반영", type="primary")
                             delete_btn = st.form_submit_button("클라우드에서 계약 삭제")
@@ -269,9 +283,10 @@ with tab1:
                                     st.error(f"업데이트 중 데이터베이스 오류 발생: {e}")
                                     
                             if delete_btn:
+                                # [핵심 보완] 계약 삭제 시 contracts 테이블만 삭제하고 history(3페이지 및 4페이지 연동 베이스)는 건드리지 않음
                                 supabase.table("contracts").delete().eq("id", row_id).execute()
                                 st.session_state[edit_state_key] = False
-                                st.warning("클라우드 서버에서 계약이 삭제되었습니다.")
+                                st.warning("클라우드 서버에서 계약이 삭제되었습니다. (기존 월세/매매 이력은 안전하게 보존됩니다.)")
                                 st.rerun()
     else:
         st.info("클라우드에 등록된 계약 정보가 없습니다.")
@@ -604,7 +619,7 @@ with tab4:
             hide_index=True
         )
         
-        # [핵심 수정] 대출 상환 에디터에서 입력되는 순간 즉시 세션에 포맷 적용 후 반영
+        # 대출 상환 에디터에서 입력되는 순간 즉시 세션에 포맷 적용 후 반영
         if 'loan_matrix_editor' in st.session_state:
             edited_rows_dict = st.session_state['loan_matrix_editor'].get('edited_rows', {})
             if edited_rows_dict:
