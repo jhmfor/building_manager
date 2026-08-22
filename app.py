@@ -483,8 +483,6 @@ with tab3:
 # [4페이지] 월세 관리 (신규 연동)
 # ==========================================
 with tab4:
-    st.header("💸 이달의 월세 수금 현황")
-    
     if not contracts_df.empty:
         df_rent = contracts_df.copy()
         df_rent['월세_숫자'] = df_rent['월세(원)'].str.replace(r'[^\d]', '', regex=True).astype(int)
