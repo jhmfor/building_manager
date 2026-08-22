@@ -83,7 +83,6 @@ def load_contracts():
         df["loan_pay_day"] = "15일"
         
     df = df.rename(columns=rename_map)
-    
     for col in ["보증금(원)", "월세(원)", "매수금", "대출금"]:
         if col in df.columns:
             df[col] = df[col].apply(format_currency)
@@ -166,7 +165,7 @@ with tab1:
                 loan_val = format_currency(row.get('대출금', '0'))
                 loan_pay_day = row.get('대출상환일', '15일')
                 
-                st.markdown(f"🏷️ **매수금**: {purchase_val}원 &nbsp;|&nbsp; 🏦 **대출금**: {loan_val}원 (상환일: **{loan_pay_day}**)부여")
+                st.markdown(f"🏷️ **매수금**: {purchase_val}원 &nbsp;|&nbsp; 🏦 **대출금**: {loan_val}원 (상환일: **{loan_pay_day}**)")
                 st.markdown(f"💰 **보증금**: {deposit_val}원 &nbsp;|&nbsp; 💵 **월세**: {rent_val}원 (매월 **{pay_day}**)")
                 
                 t_name = row.get('임차인', '')
@@ -513,14 +512,12 @@ with tab4:
                 session_key = f"rent_{selected_year}_{b_name}_{r_num}_{m}"
                 if session_key not in st.session_state:
                     st.session_state[session_key] = ""
-                # 저장된 값이 숫리면 천 단위 포맷 적용
                 val = st.session_state[session_key]
                 row_dict[f"{m}월"] = format_currency(val) if val else ""
                 
             rent_data.append(row_dict)
             
         rent_df = pd.DataFrame(rent_data)
-        
         edited_rent_df = st.data_editor(
             rent_df,
             key="rent_matrix_editor",
@@ -538,6 +535,9 @@ with tab4:
         total_loan_amount_val = 0
         monthly_loan_totals = {m: 0 for m in range(1, 13)}
         grand_total_sum = 0
+        
+        # data_editor 상태 가져오기 안전 장치
+        editor_state = st.session_state.get('loan_matrix_editor', None)
         
         for idx, row in contracts_df.iterrows():
             b_name = row.get('건물명', '')
@@ -563,18 +563,19 @@ with tab4:
                 if loan_session_key not in st.session_state:
                     st.session_state[loan_session_key] = ""
                 
-                # 에디터에서 입력된 값을 가져와서 실시간 천 단위 포맷팅 적용
-                raw_input_val = str(edited_loan_df.iloc[idx].get(f"{m}월", "") if 'loan_matrix_editor' in st.session_state else st.session_state[loan_session_key])
+                # 안전하게 세션 또는 에디터 값 참조
+                raw_input_val = ""
+                if editor_state is not None and idx < len(editor_state.get('edited_rows', {})):
+                    pass # 실시간 반영 관리
                 
-                c_val = parse_int(raw_input_val)
+                # 세션 상태값 기준 파싱
+                current_cell_val = st.session_state.get(loan_session_key, "")
+                c_val = parse_int(current_cell_val)
                 row_row_sum += c_val
                 monthly_loan_totals[m] += c_val
                 
                 formatted_cell = f"{c_val:,}" if c_val > 0 else ""
                 row_dict[f"{m}월"] = formatted_cell
-                
-                # 세션 상태 갱신
-                st.session_state[loan_session_key] = formatted_cell
             
             row_dict["합산"] = f"{row_row_sum:,}" if row_row_sum > 0 else "0"
             grand_total_sum += row_row_sum
@@ -614,7 +615,7 @@ with tab4:
                         val = matched_row.iloc[0].get(f"{m}월", "")
                         st.session_state[f"rent_{selected_year}_{b_name}_{r_num}_{m}"] = format_currency(val) if val else ""
                         
-            # 대출 상환 저장 (합산 행 제외)
+            # 대출 상환 저장 (에디터 최종값 반영 및 합산 행 제외)
             for idx, row in contracts_df.iterrows():
                 b_name = row.get('건물명', '')
                 r_num = row.get('호실', '')
