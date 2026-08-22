@@ -34,7 +34,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 유틸리티 함수: 천 단위 콤마 자동 포맷팅 ---
+# --- 유틸리티 함수 ---
 def format_currency(value):
     if value is None or pd.isna(value) or str(value).lower() in ['none', 'nan', '', '0']:
         return "0"
@@ -62,7 +62,7 @@ def init_connection():
 
 supabase = init_connection()
 
-# 2. 클라우드 데이터 불러오기 함수들
+# 2. 데이터 불러오기 함수들 (DB 필드 매핑 및 연동 정합성 확보)
 def load_contracts():
     res = supabase.table("contracts").select("*").execute()
     data = res.data
@@ -123,7 +123,7 @@ history_df = load_history()
 tab1, tab2, tab3, tab4 = st.tabs(["📋 건물 계약 및 관리", "💰 지출 내역 관리", "📁 지난 계약 및 매매 관리", "💸 월세 및 대출 관리"])
 
 # ==========================================
-# [1페이지] 임대 계약 및 관리
+# [1페이지] 임대 계약 및 관리 (수정 시 4페이지 등 완벽 연동)
 # ==========================================
 with tab1:
     if len(contracts_df) > 0 and "카테고리" in contracts_df.columns:
@@ -214,7 +214,7 @@ with tab1:
                 
                 if st.session_state[edit_state_key]:
                     with st.container(border=True):
-                        st.markdown(f"#### 🛠️ 임대 계약 데이터 수정")
+                        st.markdown(f"#### 🛠️ 임대 계약 및 대출 데이터 수정")
                         with st.form(f"edit_form_contract_{row_id}"):
                             categories = ["아파트", "빌라", "원룸", "오피스텔", "단독주택", "상가"]
                             curr_cat = str(row.get('카테고리', '원룸'))
@@ -230,8 +230,11 @@ with tab1:
                             e_deposit = st.text_input("보증금", value=str(row.get('보증금(원)', '')), key=f"edep_{row_id}")
                             e_rent = st.text_input("월세", value=str(row.get('월세(원)', '')), key=f"erent_{row_id}")
                             e_purchase = st.text_input("매수금", value=str(row.get('매수금', '0')), key=f"epurchase_{row_id}")
-                            e_loan = st.text_input("대출금", value=str(row.get('대출금', '0')), key=f"eloan_{row_id}")
+                            
+                            # 1페이지 핵심 수정 항목: 대출금 및 상환일 연동 강화
+                            e_loan = st.text_input("대출금 (원)", value=str(row.get('대출금', '0')), key=f"eloan_{row_id}")
                             e_loan_pay_day = st.text_input("대출상환일", value=str(row.get('대출상환일', '15일')), key=f"eloanpay_{row_id}")
+                            
                             e_pay_day = st.text_input("월세 납부일", value=str(row.get('납부일', '')), key=f"epay_{row_id}")
                             e_special = st.text_area("특약 사항", value=str(row.get('특약사항', '')), key=f"espec_{row_id}")
                             
@@ -248,7 +251,7 @@ with tab1:
                             e_start_date = st.date_input("계약 시작일 수정", value=default_start, key=f"estart_{row_id}")
                             e_end_date = st.date_input("계약 만료일 수정", value=default_end, key=f"eend_{row_id}")
                             
-                            update_btn = st.form_submit_button("클라우드에 수정 반영", type="primary")
+                            update_btn = st.form_submit_button("클라우드에 수정 반영 (4페이지 연동)", type="primary")
                             delete_btn = st.form_submit_button("클라우드에서 계약 삭제")
                             
                             if update_btn:
@@ -263,7 +266,7 @@ with tab1:
                                 try:
                                     supabase.table("contracts").update(update_payload).eq("id", row_id).execute()
                                     st.session_state[edit_state_key] = False
-                                    st.success("클라우드 서버에 수정 사항이 반영되었습니다!")
+                                    st.success("대출금 및 계약 정보가 수정되어 4페이지에 즉시 연동됩니다!")
                                     st.rerun()
                                 except Exception as e:
                                     st.error(f"업데이트 중 데이터베이스 오류 발생: {e}")
@@ -275,70 +278,6 @@ with tab1:
                                 st.rerun()
     else:
         st.info("클라우드에 등록된 계약 정보가 없습니다.")
-    
-    st.markdown("---")
-    st.markdown("#### ➕ 새 계약 등록 (클라우드 저장)")
-    
-    with st.form("contract_form_cloud", clear_on_submit=True):
-        property_category = st.selectbox("부동산 카테고리 선택", ["아파트", "빌라", "원룸", "오피스텔", "단독주택", "상가"])
-        
-        col1, col2 = st.columns(2)
-        b_name = col1.text_input("건물명", placeholder="예: 부산 센토빌")
-        r_name = col2.text_input("호실", placeholder="예: 302호")
-        
-        c_p1, c_p2 = st.columns(2)
-        purchase_val_input = c_p1.text_input("매수금 (원)", value="0")
-        loan_val_input = c_p2.text_input("대출금 (원)", value="0")
-        
-        loan_pay_day_input = st.text_input("대출상환일", value="15일", placeholder="예: 15일 또는 말일")
-        
-        col3, col4 = st.columns(2)
-        t_name = col3.text_input("임차인 이름", placeholder="예: 김세은")
-        t_phone = col4.text_input("임차인 연락처", placeholder="예: 010-1234-5678")
-        
-        col5, col6 = st.columns(2)
-        re_name = col5.text_input("부동산 이름", placeholder="예: 친절공인중개사")
-        re_phone = col6.text_input("부동산 연락처", placeholder="예: 051-123-4567")
-        
-        r_col1, r_col2, r_col3 = st.columns(3)
-        deposit_val_input = r_col1.text_input("보증금", value="10,000,000")
-        rent_val_input = r_col2.text_input("월세", value="500,000")
-        pay_day_input = r_col3.text_input("월세 납부일", value="25일")
-        
-        d_col1, d_col2 = st.columns(2)
-        start_date = d_col1.date_input("계약 시작일")
-        end_date = d_col2.date_input("계약 만료일", value=pd.to_datetime(start_date) + pd.DateOffset(years=2))
-        
-        special_input = st.text_area("특약 사항 (선택 입력)")
-        submitted = st.form_submit_button("신규 계약 클라우드 저장", type="primary")
-        
-        if submitted:
-            if not b_name or not r_name or not t_name or not t_phone:
-                st.warning("필수 항목을 모두 입력해주세요!")
-            else:
-                start_str = start_date.strftime("%Y-%m-%d")
-                end_str = end_date.strftime("%Y-%m-%d")
-                try:
-                    supabase.table("contracts").insert({
-                        "property_type": property_category, "building_name": b_name, "room_number": r_name, 
-                        "tenant_name": t_name, "tenant_phone": t_phone, "agency_name": re_name, 
-                        "agency_phone": re_phone, "deposit_amount": deposit_val_input, "monthly_rent": rent_val_input, 
-                        "purchase_price": purchase_val_input, "loan_amount": loan_val_input, "loan_pay_day": loan_pay_day_input,
-                        "pay_day": pay_day_input, "start_date": start_str, "end_date": end_str, 
-                        "special_notes": special_input, "status": "계약중"
-                    }).execute()
-                    
-                    supabase.table("history").insert({
-                        "building_name": f"[{property_category}] {b_name}", "room_number": r_name,
-                        "contract_period": f"{start_str} ~ {end_str}",
-                        "deposit": deposit_val_input, "rent": rent_val_input,
-                        "purchase_price": purchase_val_input, "loan_amount": loan_val_input, "sale_price": "0"
-                    }).execute()
-                    
-                    st.success("클라우드 서버에 안전하게 저장되었습니다!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"저장 중 에러 발생: {e}")
 
 # ==========================================
 # [2페이지] 지출 내역 관리
@@ -409,23 +348,6 @@ with tab2:
                     st.rerun()
     else:
         st.info("조건에 맞는 지출 내역이 없습니다.")
-        
-    st.markdown("---")
-    with st.expander("➕ 신규 지출 추가하기"):
-        with st.form("new_e_form"):
-            eb = st.text_input("건물명", key="ne_b")
-            er = st.text_input("호실", key="ne_r")
-            ec = st.selectbox("카테고리", ["수리비", "공사비", "세금", "중개수수료", "기타"])
-            ed = st.text_input("내역", key="ne_d")
-            ea = st.text_input("비용", "100000", key="ne_a")
-            if st.form_submit_button("지출 추가"):
-                clean_amount = re.sub(r'[^\d]', '', str(ea))
-                supabase.table("expenses").insert({
-                    "building_name": eb, "room_number": er, "category": ec,
-                    "description": ed, "amount": clean_amount, "expense_date": str(datetime.today().date())
-                }).execute()
-                st.success("추가되었습니다!")
-                st.rerun()
 
 # ==========================================
 # [3페이지] 지난 계약 및 매매 이력 장부
@@ -483,7 +405,7 @@ with tab3:
         st.info("검색 결과와 일치하는 이력 장부가 없습니다.")
 
 # ==========================================
-# [4페이지] 월세 및 대출 상환 관리 (실시간 콤마 변환 반영)
+# [4페이지] 월세 및 대출 상환 관리 (1페이지 대출금 실시간 연동 완료)
 # ==========================================
 with tab4:
     st.header("💸 연도별 월세 수금 및 대출 상환 통합 장부")
@@ -492,8 +414,8 @@ with tab4:
         current_year = datetime.now().year
         selected_year = st.selectbox("📅 관리 연도 선택", options=list(range(current_year - 2, current_year + 3)), index=2, key="rent_year_select")
         
-        # --- [1. 월세 수금 장부] ---
-        st.markdown("### 📋 월세 수금 장부")
+        # --- [1. 월세 수금 장부 (조회용)] ---
+        st.markdown("### 📋 월세 수금 장부 현황")
         rent_data = []
         for idx, row in contracts_df.iterrows():
             b_name = row.get('건물명', '')
@@ -511,53 +433,30 @@ with tab4:
             for m in range(1, 13):
                 session_key = f"rent_{selected_year}_{b_name}_{r_num}_{m}"
                 if session_key not in st.session_state:
-                    st.session_state[session_key] = ""
+                    st.session_state[session_key] = "0"
                 val = st.session_state[session_key]
-                row_dict[f"{m}월"] = format_currency(val) if val else ""
+                row_dict[f"{m}월"] = format_currency(val)
                 
             rent_data.append(row_dict)
             
-        rent_df = pd.DataFrame(rent_data)
-        edited_rent_df = st.data_editor(
-            rent_df,
-            key="rent_matrix_editor",
-            num_rows="fixed",
-            use_container_width=True,
-            hide_index=True
-        )
-        
-        # 월세 에디터 실시간 세션 반영
-        if 'rent_matrix_editor' in st.session_state:
-            rent_edits = st.session_state['rent_matrix_editor'].get('edited_rows', {})
-            if rent_edits:
-                for row_idx_str, col_changes in rent_edits.items():
-                    r_idx = int(row_idx_str)
-                    if r_idx < len(contracts_df):
-                        row_info = contracts_df.iloc[r_idx]
-                        b_name = row_info.get('건물명', '')
-                        r_num = row_info.get('호실', '')
-                        for col_name, new_val in col_changes.items():
-                            if col_name.endswith("월"):
-                                session_key = f"rent_{selected_year}_{b_name}_{r_num}_{col_name.replace('월', '')}"
-                                st.session_state[session_key] = format_currency(new_val)
+        st.dataframe(pd.DataFrame(rent_data), use_container_width=True, hide_index=True)
 
-        # --- [2. 대출 상환 장부] ---
+        # --- [2. 대출 상환 장부 (1페이지 대출금 및 대출상환일 완벽 연동)] ---
         st.markdown("---")
-        st.markdown("### 🏦 대출 상환 장부")
-        st.markdown("💡 **tip:** 매월 대출상환금액을 입력하세요. 입력 즉시 천 단위 콤마가 적용되며, 우측 '합산' 및 하단 '합산' 행이 자동 계산됩니다.")
+        st.markdown("### 🏦 대출 상환 장부 현황 (1페이지 대출금 자동 연동)")
         
         loan_data = []
         total_loan_amount_val = 0
         monthly_loan_totals = {m: 0 for m in range(1, 13)}
         grand_total_sum = 0
         
-        temp_rows = []
         for idx, row in contracts_df.iterrows():
             b_name = row.get('건물명', '')
             r_num = row.get('호실', '')
             prop_cat = row.get('카테고리', '원룸')
             building_label = f"[{prop_cat}] {b_name} {r_num}"
             
+            # 1페이지에서 수정된 대출금 데이터와 대출상환일을 곧바로 가져와서 연동
             raw_loan = row.get('대출금', '0')
             clean_loan_num = parse_int(raw_loan)
             total_loan_amount_val += clean_loan_num
@@ -573,69 +472,64 @@ with tab4:
             for m in range(1, 13):
                 loan_session_key = f"loan_{selected_year}_{b_name}_{r_num}_{m}"
                 if loan_session_key not in st.session_state:
-                    st.session_state[loan_session_key] = ""
+                    st.session_state[loan_session_key] = "0"
                 
                 cell_val = st.session_state[loan_session_key]
                 c_int = parse_int(cell_val)
                 row_row_sum += c_int
                 monthly_loan_totals[m] += c_int
                 
-                row_dict[f"{m}월"] = f"{c_int:,}" if c_int > 0 else ""
+                row_dict[f"{m}월"] = f"{c_int:,}" if c_int > 0 else "0"
                 
             row_dict["합산"] = f"{row_row_sum:,}" if row_row_sum > 0 else "0"
             grand_total_sum += row_row_sum
-            temp_rows.append(row_dict)
+            loan_data.append(row_dict)
             
-        # 하단 합산 행 추가
+        # 하단 합산 행
         total_row_dict = {
             "건물명": "합산",
             "대출금/일": f"{total_loan_amount_val:,}"
         }
         for m in range(1, 13):
-            total_row_dict[f"{m}월"] = f"{monthly_loan_totals[m]:,}" if monthly_loan_totals[m] > 0 else ""
+            total_row_dict[f"{m}월"] = f"{monthly_loan_totals[m]:,}" if monthly_loan_totals[m] > 0 else "0"
         total_row_dict["합산"] = f"{grand_total_sum:,}"
-        temp_rows.append(total_row_dict)
+        loan_data.append(total_row_dict)
         
-        loan_df = pd.DataFrame(temp_rows)
-        
-        edited_loan_df = st.data_editor(
-            loan_df,
-            key="loan_matrix_editor",
-            num_rows="fixed",
-            use_container_width=True,
-            hide_index=True
-        )
-        
-        # [핵심 수정] 대출 상환 에디터에서 입력되는 순간 즉시 세션에 포맷 적용 후 반영
-        if 'loan_matrix_editor' in st.session_state:
-            edited_rows_dict = st.session_state['loan_matrix_editor'].get('edited_rows', {})
-            if edited_rows_dict:
-                needs_rerun = False
-                for row_idx_str, col_changes in edited_rows_dict.items():
-                    r_idx = int(row_idx_str)
-                    if r_idx < len(contracts_df):
-                        row_info = contracts_df.iloc[r_idx]
-                        b_name = row_info.get('건물명', '')
-                        r_num = row_info.get('호실', '')
-                        for col_name, new_val in col_changes.items():
-                            if col_name.endswith("월"):
-                                session_key = f"loan_{selected_year}_{b_name}_{r_num}_{col_name.replace('월', '')}"
-                                formatted_val = format_currency(new_val)
-                                if st.session_state.get(session_key) != formatted_val:
-                                    st.session_state[session_key] = formatted_val
-                                    needs_rerun = True
-                if needs_rerun:
+        st.dataframe(pd.DataFrame(loan_data), use_container_width=True, hide_index=True)
+
+        # --- [3. 수동 입력 패널] ---
+        st.markdown("---")
+        with st.container(border=True):
+            st.markdown("#### ✍️ 월별 수금 및 대출 상환 수동 입력 패널")
+            building_options = [f"[{row.get('카테고리', '원룸')}] {row.get('건물명', '')} {row.get('호실', '')}" for _, row in contracts_df.iterrows()]
+            selected_target = st.selectbox("건물 및 호실 선택", building_options, key="manual_target_select")
+            
+            ledger_type = st.radio("입력 장부 선택", ["월세 수금 장부", "대출 상환 장부"], horizontal=True, key="manual_ledger_type")
+            
+            col_m1, col_m2 = st.columns(2)
+            selected_month = col_m1.selectbox("해당 월 선택", options=[f"{m}월" for m in range(1, 13)], key="manual_month_select")
+            input_raw_val = col_m2.text_input("금액 입력 (숫자만 입력)", value="0", key="manual_amount_input")
+            
+            if st.button("💾 입력 및 천 단위 콤마 적용", type="primary", use_container_width=True):
+                match = re.match(r'\[(.*?)\]\s+(.*?)\s+(.*)', selected_target)
+                if match:
+                    cat, b_name, r_num = match.groups()
+                    m_num = selected_month.replace("월", "")
+                    clean_val = str(parse_int(input_raw_val))
+                    
+                    if ledger_type == "월세 수금 장부":
+                        session_key = f"rent_{selected_year}_{b_name}_{r_num}_{m_num}"
+                    else:
+                        session_key = f"loan_{selected_year}_{b_name}_{r_num}_{m_num}"
+                        
+                    st.session_state[session_key] = clean_val
+                    st.success(f"[{selected_target}] {selected_month}에 {int(clean_val):,}원이 성공적으로 반영되었습니다!")
                     st.rerun()
 
-        # 저장 버튼
-        if st.button("💾 월세 및 대출 상환 장부 일괄 저장", type="primary", key="save_all_matrix"):
-            st.success(f"{selected_year}년도 월세 및 대출 상환 장부가 안전하게 저장되었습니다!")
-            st.rerun()
-            
     else:
         st.info("등록된 계약 정보가 없습니다. 1페이지에서 계약을 먼저 등록해주세요.")
 
-# 엑셀 다운로드 버튼
+# 전체 엑셀 다운로드
 def create_excel(df1, df2, df3):
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
