@@ -474,9 +474,9 @@ with tab3:
     def create_excel(df1, df2, df3):
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df1.to_excel(writer, index=False, sheet_name='임대계약_관리')
-            df2.to_excel(writer, index=False, sheet_name='지출_공사_장부')
-            df3.to_excel(writer, index=False, sheet_name='지난계약_매매이력')
+            df1.to_excel(writer, index=False, sheet_name='건물 계약 및 관')
+            df2.to_excel(writer, index=False, sheet_name='지출 내역 관')
+            df3.to_excel(writer, index=False, sheet_name='지난 계약 및 매매 관리')
         return output.getvalue()
     
     st.markdown("---")
