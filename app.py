@@ -8,7 +8,7 @@ import re
 # 페이지 설정
 st.set_page_config(page_title="건물주 스마트 비서", page_icon="🏢", layout="centered")
 st.title("🏢 건물주 스마트 비서 (Pro Version)")
-st.markdown("임대 계약은 카드형 UI로, 2·3페이지 장부는 검색, 콤마 포맷팅, 그리고 삭제 후 입력창이 깔끔하게 초기화되도록 최적화되었습니다!")
+st.markdown("임대 계약은 카드형 UI로, 2·3페이지 장부는 검색, 콤마 포맷팅, 그리고 삭제 후 입력창이 오류 없이 깔끔하게 초기화되도록 최적화되었습니다!")
 
 # --- 유틸리티 함수: 천 단위 콤마 자동 포맷팅 ---
 def format_currency(value):
@@ -244,11 +244,16 @@ with tab1:
                 st.rerun()
 
 # ==========================================
-# [2페이지] 지출 및 공사 장부 (검색 + 천 단위 콤마 + 총지출 + 표 수정 + 초기화 기능)
+# [2페이지] 지출 및 공사 장부 (검색 + 천 단위 콤마 + 총지출 + 표 수정 + 안전한 입력창 초기화)
 # ==========================================
 with tab2:
     st.subheader("💰 건물 유지보수 및 지출 장부")
     
+    # 삭제 후 재실행 시 입력창 초기화 처리
+    if st.session_state.get("clear_expense_input", False):
+        st.session_state["del_e_input"] = ""
+        st.session_state["clear_expense_input"] = False
+
     current_expenses_df = expenses_df.copy()
     exp_search = st.text_input("🔍 지출 내역 검색", placeholder="건물명, 호실, 내역 또는 카테고리 검색", key="exp_search_input")
     
@@ -306,7 +311,7 @@ with tab2:
             if st.button("🗑️ 삭제", use_container_width=True, key="del_expense_btn"):
                 if del_e_id:
                     supabase.table("expenses").delete().eq("id", int(del_e_id)).execute()
-                    st.session_state["del_e_input"] = ""  # 입력값 초기화
+                    st.session_state["clear_expense_input"] = True
                     st.warning(f"ID {del_e_id} 삭제됨")
                     st.rerun()
     else:
@@ -330,10 +335,16 @@ with tab2:
                 st.rerun()
 
 # ==========================================
-# [3페이지] 지난 계약 및 매매 (검색 + 표 수정 + 초기화 기능)
+# [3페이지] 지난 계약 및 매매 (검색 + 표 수정 + 안전한 입력창 초기화)
 # ==========================================
 with tab3:
     st.subheader("📁 지난 계약 및 매매 이력 장부")
+    
+    # 삭제 후 재실행 시 입력창 초기화 처리
+    if st.session_state.get("clear_history_input", False):
+        st.session_state["del_h_input"] = ""
+        st.session_state["clear_history_input"] = False
+
     search_query = st.text_input("🔍 항목별 검색", placeholder="검색어를 입력하세요", key="history_search")
     
     filtered_history = history_df.copy()
@@ -374,7 +385,7 @@ with tab3:
             if st.button("🗑️ 삭제", use_container_width=True, key="del_history_btn"):
                 if del_h_id:
                     supabase.table("history").delete().eq("id", int(del_h_id)).execute()
-                    st.session_state["del_h_input"] = ""  # 입력값 초기화
+                    st.session_state["clear_history_input"] = True
                     st.warning(f"ID {del_h_id} 삭제됨")
                     st.rerun()
     else:
