@@ -66,12 +66,13 @@ def load_contracts():
     res = supabase.table("contracts").select("*").execute()
     data = res.data
     if not data:
-        return pd.DataFrame(columns=["id", "건물명", "호실", "카테고리", "임차인", "임차인연락처", "부동산명", "부동산연락처", "보증금(원)", "월세(원)", "납부일", "계약일", "만료일", "특약사항", "상태"])
+        return pd.DataFrame(columns=["id", "건물명", "호실", "카테고리", "임차인", "임차인연락처", "부동산명", "부동산연락처", "보증금(원)", "월세(원)", "매수금", "대출금", "납부일", "계약일", "만료일", "특약사항", "상태"])
     df = pd.DataFrame(data)
     rename_map = {
         "building_name": "건물명", "room_number": "호실", "property_type": "카테고리",
         "tenant_name": "임차인", "tenant_phone": "임차인연락처", "agency_name": "부동산명", 
         "agency_phone": "부동산연락처", "deposit_amount": "보증금(원)", "monthly_rent": "월세(원)", 
+        "purchase_price": "매수금", "loan_amount": "대출금",
         "pay_day": "납부일", "start_date": "계약일", "end_date": "만료일", 
         "special_notes": "특약사항", "status": "상태"
     }
@@ -99,7 +100,7 @@ def load_history():
     df = pd.DataFrame(data)
     return df.rename(columns={
         "building_name": "건물명", "room_number": "호실", "contract_period": "계약기간", 
-        "deposit": "보증금", "rent": "월세", "purchase_price": "매수가", "sale_price": "매도가"
+        "deposit": "보증금", "rent": "월세", "purchase_price": "매수가", "loan_amount": "대출금", "sale_price": "매도가"
     })
 
 contracts_df = load_contracts()
@@ -142,7 +143,6 @@ with tab1:
                 is_expired = False
 
             with st.container(border=True):
-                # 상단: 건물명만 깔끔하게 전체 너비로 표시
                 prop_cat = row.get('카테고리', '원룸')
                 st.markdown(f"### 🏢 [{prop_cat}] {row.get('건물명', '')} {row.get('호실', '')}")
                 
@@ -178,10 +178,8 @@ with tab1:
                 if edit_state_key not in st.session_state:
                     st.session_state[edit_state_key] = False
                 
-                # --- [변경 포인트] 하단 영역: 상태 뱃지를 '수정/삭제' 버튼 왼쪽에 배치 ---
                 btn_col1, btn_col2 = st.columns([3, 1])
                 with btn_col1:
-                    # 상태를 버튼 왼쪽에 보기 좋게 출력
                     if is_expired:
                         st.markdown("🔴 **계약만료**", unsafe_allow_html=True)
                     else:
@@ -215,6 +213,8 @@ with tab1:
                             e_rephone = st.text_input("부동산 연락처", value=str(row.get('부동산연락처', '')), key=f"erap_{row_id}")
                             e_deposit = st.text_input("보증금", value=str(row.get('보증금(원)', '')), key=f"edep_{row_id}")
                             e_rent = st.text_input("월세", value=str(row.get('월세(원)', '')), key=f"erent_{row_id}")
+                            e_purchase = st.text_input("매수금", value=str(row.get('매수금', '0')), key=f"epurchase_{row_id}")
+                            e_loan = st.text_input("대출금", value=str(row.get('대출금', '0')), key=f"eloan_{row_id}")
                             e_pay_day = st.text_input("월세 납부일", value=str(row.get('납부일', '')), key=f"epay_{row_id}")
                             e_special = st.text_area("특약 사항", value=str(row.get('특약사항', '')), key=f"espec_{row_id}")
                             
@@ -245,6 +245,8 @@ with tab1:
                                     "agency_phone": e_rephone, 
                                     "deposit_amount": e_deposit, 
                                     "monthly_rent": e_rent, 
+                                    "purchase_price": e_purchase,
+                                    "loan_amount": e_loan,
                                     "pay_day": e_pay_day, 
                                     "start_date": str(e_start_date), 
                                     "end_date": str(e_end_date),
@@ -276,6 +278,11 @@ with tab1:
         b_name = col1.text_input("건물명", placeholder="예: 부산 센토빌")
         r_name = col2.text_input("호실", placeholder="예: 302호")
         
+        # 신규 추가된 매수금 및 대출금 입력 필드
+        c_p1, c_p2 = st.columns(2)
+        purchase_val_input = c_p1.text_input("매수금 (원)", value="0")
+        loan_val_input = c_p2.text_input("대출금 (원)", value="0")
+        
         col3, col4 = st.columns(2)
         t_name = col3.text_input("임차인 이름", placeholder="예: 김세은")
         t_phone = col4.text_input("임차인 연락처", placeholder="예: 010-1234-5678")
@@ -288,12 +295,6 @@ with tab1:
         deposit_val_input = r_col1.text_input("보증금", value="10,000,000")
         rent_val_input = r_col2.text_input("월세", value="500,000")
         pay_day_input = r_col3.text_input("월세 납부일", value="25일")
-
-        # --- 추가된 항목: 매수가 및 대출금 ---
-        c_col1, c_col2 = st.columns(2)
-        purchase_price_input = c_col1.text_input("매수가(원)", value="0")
-        loan_amount_input = c_col2.text_input("대출금(원)", value="0")
-        # ------------------------------------
         
         d_col1, d_col2 = st.columns(2)
         start_date = d_col1.date_input("계약 시작일")
@@ -309,24 +310,23 @@ with tab1:
                 start_str = start_date.strftime("%Y-%m-%d")
                 end_str = end_date.strftime("%Y-%m-%d")
                 
-               try:
-                    # 1. contracts 테이블 저장
+                try:
+                    # contracts 테이블 저장 (매수금, 대출금 포함)
                     supabase.table("contracts").insert({
                         "property_type": property_category, "building_name": b_name, "room_number": r_name, 
                         "tenant_name": t_name, "tenant_phone": t_phone, "agency_name": re_name, 
                         "agency_phone": re_phone, "deposit_amount": deposit_val_input, "monthly_rent": rent_val_input, 
+                        "purchase_price": purchase_val_input, "loan_amount": loan_val_input,
                         "pay_day": pay_day_input, "start_date": start_str, "end_date": end_str, 
-                        "special_notes": special_input, "status": "계약중",
-                        "purchase_price": purchase_price_input, "loan_amount": loan_amount_input # 추가 필드
+                        "special_notes": special_input, "status": "계약중"
                     }).execute()
                     
-                    # 2. history 테이블 저장
+                    # history 테이블 연동 저장 (매수금, 대출금 연동)
                     supabase.table("history").insert({
                         "building_name": f"[{property_category}] {b_name}", "room_number": r_name,
                         "contract_period": f"{start_str} ~ {end_str}",
                         "deposit": deposit_val_input, "rent": rent_val_input,
-                        "purchase_price": purchase_price_input, # 3페이지로 연동
-                        "loan_amount": loan_amount_input       # 3페이지로 연동
+                        "purchase_price": purchase_val_input, "loan_amount": loan_val_input, "sale_price": "0"
                     }).execute()
                     
                     st.success("클라우드 서버에 안전하게 저장되었습니다!")
@@ -338,9 +338,6 @@ with tab1:
 # [2페이지] 지출 내역 관리
 # ==========================================
 with tab2:
-    # st.subheader("💰 건물 유지보수 및 지출 장부") <-- 삭제됨
-    # st.subheader 대신 마크다운으로 깔끔하게 처리하거나 바로 검색창 노출
-        
     if st.session_state.get("clear_expense_input", False):
         st.session_state["del_e_input"] = ""
         st.session_state["clear_expense_input"] = False
@@ -429,8 +426,6 @@ with tab2:
 # [3페이지] 지난 계약 및 매매 이력 장부
 # ==========================================
 with tab3:
-    # st.subheader("📁 지난 계약 및 매매 이력 장부") <-- 삭제됨
-    
     if st.session_state.get("clear_history_input", False):
         st.session_state["del_h_input"] = ""
         st.session_state["clear_history_input"] = False
@@ -464,6 +459,7 @@ with tab3:
                             "deposit": str(row.get("보증금", "")),
                             "rent": str(row.get("월세", "")),
                             "purchase_price": str(row.get("매수가", "")),
+                            "loan_amount": str(row.get("대출금", "")),
                             "sale_price": str(row.get("매도가", ""))
                         }).eq("id", row_id).execute()
                 st.success("이력이 수정되었습니다!")
