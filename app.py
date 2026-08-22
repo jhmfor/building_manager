@@ -32,14 +32,18 @@ def load_contracts():
     res = supabase.table("contracts").select("*").execute()
     data = res.data
     if not data:
-        return pd.DataFrame(columns=["id", "건물명", "호실", "임차인", "임차인연락처", "부동산명", "부동산연락처", "보증금(원)", "월세(원)", "납부일", "계약일", "만료일", "특약사항", "상태"])
+        return pd.DataFrame(columns=["id", "건물명", "호실", "카테고리", "임차인", "임차인연락처", "부동산명", "부동산연락처", "보증금(원)", "월세(원)", "납부일", "계약일", "만료일", "특약사항", "상태"])
     df = pd.DataFrame(data)
     rename_map = {
-        "building_name": "건물명", "room_number": "호실", "tenant_name": "임차인", 
-        "tenant_phone": "임차인연락처", "agency_name": "부동산명", "agency_phone": "부동산연락처", 
-        "deposit_amount": "보증금(원)", "monthly_rent": "월세(원)", "pay_day": "납부일", 
-        "start_date": "계약일", "end_date": "만료일", "special_notes": "특약사항", "status": "상태"
+        "building_name": "건물명", "room_number": "호실", "property_type": "카테고리",
+        "tenant_name": "임차인", "tenant_phone": "임차인연락처", "agency_name": "부동산명", 
+        "agency_phone": "부동산연락처", "deposit_amount": "보증금(원)", "monthly_rent": "월세(원)", 
+        "pay_day": "납부일", "start_date": "계약일", "end_date": "만료일", 
+        "special_notes": "특약사항", "status": "상태"
     }
+    # 기존 데이터에 카테고리 컬럼이 없을 경우를 대비한 안전 장치
+    if "property_type" not in df.columns:
+        df["property_type"] = "원룸"
     return df.rename(columns=rename_map)
 
 def load_expenses():
@@ -72,10 +76,29 @@ history_df = load_history()
 tab1, tab2, tab3 = st.tabs(["📋 임대 계약 및 관리", "💰 지출 및 공사 장부", "📁 지난 계약 및 매매 관리"])
 
 # ==========================================
-# [1페이지] 임대 계약 및 관리 (기존 마스터 카드형 UI)
+# [1페이지] 임대 계약 및 관리 (카테고리 요약 배지 + 마스터 카드형 UI)
 # ==========================================
 with tab1:
     st.subheader("현재 임대 계약 현황 및 관리")
+    
+    # 선택된 카테고리 항목 총 수량 요약 표시 (0개인 항목은 자동 제외)
+    if len(contracts_df) > 0 and "카테고리" in contracts_df.columns:
+        category_counts = contracts_df["카테고리"].value_counts()
+        summary_badges = []
+        for cat, cnt in category_counts.items():
+            if pd.notnull(cat) and str(cat).strip() != "" and cnt > 0:
+                summary_badges.append(f"<b>{cat}</b> {cnt}개")
+        
+        if summary_badges:
+            badge_html = " &nbsp;|&nbsp; ".join(summary_badges)
+            st.markdown(
+                f"""
+                <div style="background-color: #f8f9fa; padding: 10px 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e3e6f0; font-size: 0.95em;">
+                    📊 <b>보유 부동산 요약:</b> {badge_html}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
     
     if len(contracts_df) > 0:
         for idx, row in contracts_df.iterrows():
@@ -91,7 +114,8 @@ with tab1:
             with st.container(border=True):
                 col_t1, col_t2 = st.columns([2, 1])
                 with col_t1:
-                    st.markdown(f"### 🏢 {row.get('건물명', '')} {row.get('호실', '')}")
+                    prop_cat = row.get('카테고리', '원룸')
+                    st.markdown(f"### 🏢 [{prop_cat}] {row.get('건물명', '')} {row.get('호실', '')}")
                 with col_t2:
                     if is_expired:
                         st.markdown("🔴 **계약만료**")
@@ -146,6 +170,11 @@ with tab1:
                     with st.container(border=True):
                         st.markdown(f"#### 🛠️ 임대 계약 데이터 수정")
                         with st.form(f"edit_form_contract_{row_id}"):
+                            categories = ["아파트", "빌라", "원룸", "오피스텔", "단독주택", "상가"]
+                            curr_cat = str(row.get('카테고리', '원룸'))
+                            cat_index = categories.index(curr_cat) if curr_cat in categories else 2
+                            
+                            e_cat = st.selectbox("카테고리 선택", categories, index=cat_index)
                             e_bname = st.text_input("건물명", value=str(row.get('건물명', '')))
                             e_rname = st.text_input("호실", value=str(row.get('호실', '')))
                             e_tname = st.text_input("임차인 이름", value=str(row.get('임차인', '')))
@@ -174,10 +203,10 @@ with tab1:
                             
                             if update_btn:
                                 supabase.table("contracts").update({
-                                    "building_name": e_bname, "room_number": e_rname, "tenant_name": e_tname,
-                                    "tenant_phone": e_tphone, "agency_name": e_rename, "agency_phone": e_rephone,
-                                    "deposit_amount": e_deposit, "monthly_rent": e_rent, "pay_day": e_pay_day,
-                                    "start_date": str(e_start_date), "end_date": str(e_end_date)
+                                    "property_type": e_cat, "building_name": e_bname, "room_number": e_rname, 
+                                    "tenant_name": e_tname, "tenant_phone": e_tphone, "agency_name": e_rename, 
+                                    "agency_phone": e_rephone, "deposit_amount": e_deposit, "monthly_rent": e_rent, 
+                                    "pay_day": e_pay_day, "start_date": str(e_start_date), "end_date": str(e_end_date)
                                 }).eq("id", row_id).execute()
                                 st.session_state[edit_state_key] = False
                                 st.success("클라우드 서버에 수정 사항이 반영되었습니다!")
@@ -195,6 +224,8 @@ with tab1:
     st.markdown("#### ➕ 새로운 계약 등록 (클라우드 저장)")
     
     with st.form("contract_form_cloud", clear_on_submit=True):
+        property_category = st.selectbox("부동산 카테고리 선택", ["아파트", "빌라", "원룸", "오피스텔", "단독주택", "상가"])
+        
         col1, col2 = st.columns(2)
         b_name = col1.text_input("건물명", placeholder="예: 부산 센토빌")
         r_name = col2.text_input("호실", placeholder="예: 302호")
@@ -227,14 +258,15 @@ with tab1:
                 end_str = end_date.strftime("%Y-%m-%d")
                 
                 supabase.table("contracts").insert({
-                    "building_name": b_name, "room_number": r_name, "tenant_name": t_name,
-                    "tenant_phone": t_phone, "agency_name": re_name, "agency_phone": re_phone,
-                    "deposit_amount": deposit_val_input, "monthly_rent": rent_val_input, "pay_day": pay_day_input,
-                    "start_date": start_str, "end_date": end_str, "special_notes": special_input, "status": "계약중"
+                    "property_type": property_category, "building_name": b_name, "room_number": r_name, 
+                    "tenant_name": t_name, "tenant_phone": t_phone, "agency_name": re_name, 
+                    "agency_phone": re_phone, "deposit_amount": deposit_val_input, "monthly_rent": rent_val_input, 
+                    "pay_day": pay_day_input, "start_date": start_str, "end_date": end_str, 
+                    "special_notes": special_input, "status": "계약중"
                 }).execute()
                 
                 supabase.table("history").insert({
-                    "building_name": b_name, "room_number": r_name,
+                    "building_name": f"[{property_category}] {b_name}", "room_number": r_name,
                     "contract_period": f"{start_str} ~ {end_str}",
                     "deposit": deposit_val_input, "rent": rent_val_input,
                     "purchase_price": "0", "sale_price": "0"
@@ -244,12 +276,11 @@ with tab1:
                 st.rerun()
 
 # ==========================================
-# [2페이지] 지출 및 공사 장부 (검색 + 천 단위 콤마 + 총지출 + 표 수정 + 안전한 입력창 초기화)
+# [2페이지] 지출 및 공사 장부
 # ==========================================
 with tab2:
     st.subheader("💰 건물 유지보수 및 지출 장부")
     
-    # 삭제 후 재실행 시 입력창 초기화 처리
     if st.session_state.get("clear_expense_input", False):
         st.session_state["del_e_input"] = ""
         st.session_state["clear_expense_input"] = False
@@ -335,12 +366,11 @@ with tab2:
                 st.rerun()
 
 # ==========================================
-# [3페이지] 지난 계약 및 매매 (검색 + 표 수정 + 안전한 입력창 초기화)
+# [3페이지] 지난 계약 및 매매 이력 장부
 # ==========================================
 with tab3:
     st.subheader("📁 지난 계약 및 매매 이력 장부")
     
-    # 삭제 후 재실행 시 입력창 초기화 처리
     if st.session_state.get("clear_history_input", False):
         st.session_state["del_h_input"] = ""
         st.session_state["clear_history_input"] = False
