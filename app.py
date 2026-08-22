@@ -112,8 +112,6 @@ tab1, tab2, tab3 = st.tabs(["📋 임대 계약 및 관리", "💰 지출 내역
 # [1페이지] 임대 계약 및 관리
 # ==========================================
 with tab1:
-    # st.subheader("현재 임대 계약 현황 및 관리") <-- 삭제됨
-    
     if len(contracts_df) > 0 and "카테고리" in contracts_df.columns:
         category_counts = contracts_df["카테고리"].value_counts()
         summary_badges = []
@@ -126,7 +124,7 @@ with tab1:
             st.markdown(
                 f"""
                 <div style="background-color: #f8f9fa; padding: 10px 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e3e6f0; font-size: 0.95em;">
-                    📊 <b>보유 부동산:</b> {badge_html}
+                    📊 <b>보유 부동산 요약:</b> {badge_html}
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -144,21 +142,9 @@ with tab1:
                 is_expired = False
 
             with st.container(border=True):
-                col_t1, col_t2 = st.columns([2, 1])
-                with col_t1:
-                    prop_cat = row.get('카테고리', '원룸')
-                    st.markdown(f"### 🏢 [{prop_cat}] {row.get('건물명', '')} {row.get('호실', '')}")
-                with col_t2:
-                    if is_expired:
-                        st.markdown("🔴 **계약만료**")
-                    else:
-                        status_badge = row.get('상태', '계약중')
-                        if status_badge == "계약중":
-                            st.markdown(f"🟢 **{status_badge}**")
-                        elif status_badge == "만료임박":
-                            st.markdown(f"🟠 **⚠️ {status_badge}**")
-                        else:
-                            st.markdown(f"🔴 **{status_badge}**")
+                # 상단: 건물명만 깔끔하게 전체 너비로 표시
+                prop_cat = row.get('카테고리', '원룸')
+                st.markdown(f"### 🏢 [{prop_cat}] {row.get('건물명', '')} {row.get('호실', '')}")
                 
                 deposit_val = format_currency(row.get('보증금(원)', '0'))
                 rent_val = format_currency(row.get('월세(원)', '0'))
@@ -192,9 +178,23 @@ with tab1:
                 if edit_state_key not in st.session_state:
                     st.session_state[edit_state_key] = False
                 
-                btn_col1, btn_col2 = st.columns([4, 1])
+                # --- [변경 포인트] 하단 영역: 상태 뱃지를 '수정/삭제' 버튼 왼쪽에 배치 ---
+                btn_col1, btn_col2 = st.columns([3, 1])
+                with btn_col1:
+                    # 상태를 버튼 왼쪽에 보기 좋게 출력
+                    if is_expired:
+                        st.markdown("🔴 **계약만료**", unsafe_allow_html=True)
+                    else:
+                        status_badge = row.get('상태', '계약중')
+                        if status_badge == "계약중":
+                            st.markdown(f"🟢 **{status_badge}**", unsafe_allow_html=True)
+                        elif status_badge == "만료임박":
+                            st.markdown(f"🟠 **⚠️ {status_badge}**", unsafe_allow_html=True)
+                        else:
+                            st.markdown(f"🔴 **{status_badge}**", unsafe_allow_html=True)
+                
                 with btn_col2:
-                    if st.button("✏️ 수정/삭제", key=f"toggle_contract_{row_id}"):
+                    if st.button("✏️ 수정/삭제", key=f"toggle_contract_{row_id}", use_container_width=True):
                         st.session_state[edit_state_key] = not st.session_state[edit_state_key]
                         st.rerun()
                 
@@ -257,7 +257,6 @@ with tab1:
                                     st.rerun()
                                 except Exception as e:
                                     st.error(f"업데이트 중 데이터베이스 오류 발생: {e}")
-                                    st.info("💡 팁: Supabase 대시보드에서 'contracts' 테이블에 'property_type'과 'special_notes' 컬럼이 정확히 생성되어 있는지 확인해 주세요.")
                                     
                             if delete_btn:
                                 supabase.table("contracts").delete().eq("id", row_id).execute()
