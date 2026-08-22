@@ -3,56 +3,46 @@ import pandas as pd
 from io import BytesIO
 from datetime import datetime
 from supabase import create_client
-import json
 import re
 
-# [공통 유틸리티] 천 단위 콤마 자동 포맷팅 함수
-def format_currency(value):
-    try:
-        # 숫자만 남기고 나머지 제거 후 천 단위 콤마 삽입
-        clean_val = re.sub(r'[^\d]', '', str(value))
-        return f"{int(clean_val):,}" if clean_val else "0"
-    except:
-        return "0"
-        
 # 페이지 설정
 st.set_page_config(page_title="건물주 스마트 비서", page_icon="🏢", layout="centered")
 st.title("🏢 건물주 스마트 비서 (Pro Version)")
 
-# --- [UI 커스텀 CSS: 탭 글씨 크기 및 스타일 강화] ---
+# --- [UI 커스텀 CSS] ---
 st.markdown("""
     <style>
-    /* 1. 탭 스타일: 매우 크고 굵게 */
     button[data-baseweb="tab"] {
         font-size: 30px !important;      
         font-weight: 1200 !important;     
         padding: 20px 40px !important;   
     }
-    
-    /* 2. 폼 라벨(항목 이름): 굵고 눈에 띄게 */
     label {
         font-size: 30px !important;
         font-weight: 1200 !important;
         color: #2c3e50 !important;
     }
-    
-    /* 3. 입력창(Text Input) 내부 글씨 크기 조정 */
     input {
         font-size: 16px !important;
     }
-    
-    /* 4. 데이터 에디터 폰트 키우기 */
     [data-testid="stDataFrame"] {
         font-size: 16px !important;
     }
-    
-    /* 5. 마크다운 내 강조 텍스트(항목) 키우기 */
     b, strong {
         font-size: 17px !important;
     }
     </style>
 """, unsafe_allow_html=True)
 
+# --- 유틸리티 함수: 천 단위 콤마 자동 포맷팅 ---
+def format_currency(value):
+    if value is None or pd.isna(value) or str(value).lower() == 'none':
+        return "0"
+    try:
+        clean_val = re.sub(r'[^\d]', '', str(value))
+        return f"{int(clean_val):,}" if clean_val else "0"
+    except:
+        return str(value)
 
 # 1. Supabase 클라우드 연결 설정
 @st.cache_resource
@@ -63,7 +53,7 @@ def init_connection():
 
 supabase = init_connection()
 
-# 2. 클라우드 데이터 불러오기 함수들
+# 2. 클라우드 데이터 불러오기 및 포맷팅 적용 함수들
 def load_contracts():
     res = supabase.table("contracts").select("*").execute()
     data = res.data
@@ -80,7 +70,13 @@ def load_contracts():
     }
     if "property_type" not in df.columns:
         df["property_type"] = "원룸"
-    return df.rename(columns=rename_map)
+    df = df.rename(columns=rename_map)
+    
+    # 금액 컬럼 천 단위 콤마 자동 적용
+    for col in ["보증금(원)", "월세(원)", "매수금", "대출금"]:
+        if col in df.columns:
+            df[col] = df[col].apply(format_currency)
+    return df
 
 def load_expenses():
     res = supabase.table("expenses").select("*").execute()
@@ -100,10 +96,16 @@ def load_history():
     data = res.data
     if not data: return pd.DataFrame()
     df = pd.DataFrame(data)
-    return df.rename(columns={
+    df = df.rename(columns={
         "building_name": "건물명", "room_number": "호실", "contract_period": "계약기간", 
         "deposit": "보증금", "rent": "월세", "purchase_price": "매수가", "loan_amount": "대출금", "sale_price": "매도가"
     })
+    
+    # 이력 장부의 금액/대출금 컬럼도 자동 콤마 포맷팅 적용
+    for col in ["보증금", "월세", "매수가", "대출금", "매도가"]:
+        if col in df.columns:
+            df[col] = df[col].apply(format_currency)
+    return df
 
 contracts_df = load_contracts()
 expenses_df = load_expenses()
@@ -152,13 +154,12 @@ with tab1:
                 rent_val = format_currency(row.get('월세(원)', '0'))
                 pay_day = row.get('납부일', '25일')
                 
-                # --- [추가된 부분] 매수금과 대출금 포맷팅 및 카드 출력 ---
+                # 매수금과 대출금을 윗줄에 배치하고 콤마 포맷팅 적용
                 purchase_val = format_currency(row.get('매수금', '0'))
                 loan_val = format_currency(row.get('대출금', '0'))
                 
                 st.markdown(f"🏷️ **매수금**: {purchase_val}원 &nbsp;|&nbsp; 🏦 **대출금**: {loan_val}원")
-                st.markdown(f"💰 **보증금**: {deposit_val}원 &nbsp;|&nbsp; 💵 **월세**: {rent_val}원 (매월 **{pay_day}**)")                
-                # ----------------------------------------------------
+                st.markdown(f"💰 **보증금**: {deposit_val}원 &nbsp;|&nbsp; 💵 **월세**: {rent_val}원 (매월 **{pay_day}**)")
                 
                 t_name = row.get('임차인', '')
                 t_phone = row.get('임차인연락처', '')
@@ -244,20 +245,11 @@ with tab1:
                             
                             if update_btn:
                                 update_payload = {
-                                    "property_type": e_cat, 
-                                    "building_name": e_bname, 
-                                    "room_number": e_rname, 
-                                    "tenant_name": e_tname, 
-                                    "tenant_phone": e_tphone, 
-                                    "agency_name": e_rename, 
-                                    "agency_phone": e_rephone, 
-                                    "deposit_amount": e_deposit, 
-                                    "monthly_rent": e_rent, 
-                                    "purchase_price": e_purchase,
-                                    "loan_amount": e_loan,
-                                    "pay_day": e_pay_day, 
-                                    "start_date": str(e_start_date), 
-                                    "end_date": str(e_end_date),
+                                    "property_type": e_cat, "building_name": e_bname, "room_number": e_rname, 
+                                    "tenant_name": e_tname, "tenant_phone": e_tphone, "agency_name": e_rename, 
+                                    "agency_phone": e_rephone, "deposit_amount": e_deposit, "monthly_rent": e_rent, 
+                                    "purchase_price": e_purchase, "loan_amount": e_loan,
+                                    "pay_day": e_pay_day, "start_date": str(e_start_date), "end_date": str(e_end_date),
                                     "special_notes": e_special
                                 }
                                 try:
@@ -282,11 +274,10 @@ with tab1:
     with st.form("contract_form_cloud", clear_on_submit=True):
         property_category = st.selectbox("부동산 카테고리 선택", ["아파트", "빌라", "원룸", "오피스텔", "단독주택", "상가"])
         
-           
         col1, col2 = st.columns(2)
         b_name = col1.text_input("건물명", placeholder="예: 부산 센토빌")
         r_name = col2.text_input("호실", placeholder="예: 302호")
-
+        
         c_p1, c_p2 = st.columns(2)
         purchase_val_input = c_p1.text_input("매수금 (원)", value="0")
         loan_val_input = c_p2.text_input("대출금 (원)", value="0")
@@ -462,11 +453,11 @@ with tab3:
                             "building_name": str(row.get("건물명", "")),
                             "room_number": str(row.get("호실", "")),
                             "contract_period": str(row.get("계약기간", "")),
-                            "deposit": str(row.get("보증금", "")),
-                            "rent": str(row.get("월세", "")),
-                            "purchase_price": str(row.get("매수가", "")),
-                            "loan_amount": str(row.get("대출금", "")),
-                            "sale_price": str(row.get("매도가", ""))
+                            "deposit": re.sub(r'[^\d]', '', str(row.get("보증금", "0"))),
+                            "rent": re.sub(r'[^\d]', '', str(row.get("월세", "0"))),
+                            "purchase_price": re.sub(r'[^\d]', '', str(row.get("매수가", "0"))),
+                            "loan_amount": re.sub(r'[^\d]', '', str(row.get("대출금", "0"))),
+                            "sale_price": re.sub(r'[^\d]', '', str(row.get("매도가", "0")))
                         }).eq("id", row_id).execute()
                 st.success("이력이 수정되었습니다!")
                 st.rerun()
