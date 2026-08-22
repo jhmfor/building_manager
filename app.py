@@ -488,15 +488,13 @@ with tab3:
 # ==========================================
 # [4페이지] 월세 및 대출 상환 관리 (2단 매트릭스 뷰)
 # ==========================================
-with tab4:
-    st.header("💸 연도별 월세 수금 및 대출 상환 통합 장부")
-    
+with tab4:       
     if not contracts_df.empty:
         current_year = datetime.now().year
         selected_year = st.selectbox("📅 관리 연도 선택", options=list(range(current_year - 2, current_year + 3)), index=2, key="rent_year_select")
         
         # --- [상단 파트: 월세 수금 관리] ---
-        st.markdown("### 📋 월세 수금 장부")
+        st.markdown("### 📋 월세 수금")
         rent_data = []
         for idx, row in contracts_df.iterrows():
             b_name = row.get('건물명', '')
@@ -531,7 +529,7 @@ with tab4:
         
         # --- [하단 파트: 대출 상환 관리] ---
         st.markdown("---")
-        st.markdown("### 🏦 대출 상환 장부")
+        st.markdown("### 🏦 대출 상환")
         st.markdown("💡 **tip:** 매월 대출상환금액을 입력하세요. 맨 우측 '합산' 및 맨 하단 '합산'은 자동으로 계산됩니다.")
         
         loan_data = []
