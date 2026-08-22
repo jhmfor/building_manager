@@ -22,8 +22,8 @@ st.markdown("""
     
     /* 2. 폼 라벨(항목 이름): 굵고 눈에 띄게 */
     label {
-        font-size: 18px !important;
-        font-weight: 800 !important;
+        font-size: 30px !important;
+        font-weight: 1200 !important;
         color: #2c3e50 !important;
     }
     
