@@ -154,8 +154,8 @@ with tab1:
                 purchase_val = format_currency(row.get('매수금', '0'))
                 loan_val = format_currency(row.get('대출금', '0'))
                 
-                st.markdown(f"💰 **보증금**: {deposit_val}원 &nbsp;|&nbsp; 💵 **월세**: {rent_val}원 (매월 **{pay_day}**)")
                 st.markdown(f"🏷️ **매수금**: {purchase_val}원 &nbsp;|&nbsp; 🏦 **대출금**: {loan_val}원")
+                st.markdown(f"💰 **보증금**: {deposit_val}원 &nbsp;|&nbsp; 💵 **월세**: {rent_val}원 (매월 **{pay_day}**)")                
                 # ----------------------------------------------------
                 
                 t_name = row.get('임차인', '')
