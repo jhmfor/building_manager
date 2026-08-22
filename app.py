@@ -8,7 +8,7 @@ import re
 # 페이지 설정
 st.set_page_config(page_title="건물주 스마트 비서", page_icon="🏢", layout="centered")
 st.title("🏢 건물주 스마트 비서 (Pro Version)")
-st.markdown("임대 계약은 카드형 UI로, 장부들은 검색 기능과 표 직접 수정 기능이 완벽 결합되었습니다!")
+st.markdown("임대 계약은 카드형 UI로, 2·3페이지 장부는 검색과 콤마 포맷팅이 적용된 표 수정 화면으로 동작합니다!")
 
 # --- 유틸리티 함수: 천 단위 콤마 자동 포맷팅 ---
 def format_currency(value):
@@ -47,10 +47,14 @@ def load_expenses():
     data = res.data
     if not data: return pd.DataFrame()
     df = pd.DataFrame(data)
-    return df.rename(columns={
+    df = df.rename(columns={
         "expense_date": "날짜", "building_name": "건물명", "room_number": "호실",
         "category": "카테고리", "description": "내역", "amount": "비용"
     })
+    # 비용 컬럼 천 단위 콤마 포맷팅 적용
+    if "비용" in df.columns:
+        df["비용"] = df["비용"].apply(format_currency)
+    return df
 
 def load_history():
     res = supabase.table("history").select("*").execute()
@@ -241,7 +245,7 @@ with tab1:
                 st.rerun()
 
 # ==========================================
-# [2페이지] 지출 및 공사 장부 (검색 + 총지출 + 표 수정)
+# [2페이지] 지출 및 공사 장부 (검색 + 천 단위 콤마 + 총지출 + 표 수정)
 # ==========================================
 with tab2:
     st.subheader("💰 건물 유지보수 및 지출 장부")
@@ -285,12 +289,13 @@ with tab2:
                 for _, row in edited_e_df.iterrows():
                     row_id = row.get("id")
                     if row_id:
+                        clean_amt = re.sub(r'[^\d]', '', str(row.get("비용", "0")))
                         supabase.table("expenses").update({
                             "building_name": str(row.get("건물명", "")),
                             "room_number": str(row.get("호실", "")),
                             "category": str(row.get("카테고리", "기타")),
                             "description": str(row.get("내역", "")),
-                            "amount": str(row.get("비용", "0")),
+                            "amount": clean_amt,
                             "expense_date": str(row.get("날짜", ""))
                         }).eq("id", row_id).execute()
                 st.success("지출 장부가 수정되었습니다!")
@@ -315,9 +320,10 @@ with tab2:
             ed = st.text_input("내역", key="ne_d")
             ea = st.text_input("비용", "100000", key="ne_a")
             if st.form_submit_button("지출 추가"):
+                clean_amount = re.sub(r'[^\d]', '', str(ea))
                 supabase.table("expenses").insert({
                     "building_name": eb, "room_number": er, "category": ec,
-                    "description": ed, "amount": ea, "expense_date": str(datetime.today().date())
+                    "description": ed, "amount": clean_amount, "expense_date": str(datetime.today().date())
                 }).execute()
                 st.success("추가되었습니다!")
                 st.rerun()
