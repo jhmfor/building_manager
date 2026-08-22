@@ -8,7 +8,7 @@ import re
 # 페이지 설정
 st.set_page_config(page_title="건물주 스마트 비서", page_icon="🏢", layout="centered")
 st.title("🏢 건물주 스마트 비서 (Pro Version)")
-st.markdown("임대 계약은 카드형 UI로, 2·3페이지 장부는 검색과 콤마 포맷팅이 적용된 표 수정 화면으로 동작합니다!")
+
 
 # --- 유틸리티 함수: 천 단위 콤마 자동 포맷팅 ---
 def format_currency(value):
