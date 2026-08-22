@@ -373,7 +373,7 @@ with tab2:
                 st.rerun()
                 
         with col_e2_input:
-            del_e_id = st.text_input("삭제할 ID", placeholder="ID 번호 입력", key="del_e_input", label_visibility="collapsed")
+            del_e_id = st.text_input("삭제할 ID", placeholder="삭제할 ID 번호 입력", key="del_e_input", label_visibility="collapsed")
         with col_e2_btn:
             if st.button("🗑️ 삭제", use_container_width=True, key="del_expense_btn"):
                 if del_e_id:
@@ -446,7 +446,7 @@ with tab3:
                 st.rerun()
                 
         with col_h2_input:
-            del_h_id = st.text_input("삭제할 ID", placeholder="ID 번호 입력", key="del_h_input", label_visibility="collapsed")
+            del_h_id = st.text_input("삭제할 ID", placeholder="삭제할 ID 번호 입력", key="del_h_input", label_visibility="collapsed")
         with col_h2_btn:
             if st.button("🗑️ 삭제", use_container_width=True, key="del_history_btn"):
                 if del_h_id:
