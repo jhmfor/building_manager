@@ -15,7 +15,7 @@ st.markdown("""
     <style>
     /* 탭 전체 컨테이너와 버튼의 글자 크기를 강제 조정 */
     button[data-baseweb="tab"] {
-        font-size: 24px !important; /* 원하시는 크기로 조정하세요 */
+        font-size: 44px !important; /* 원하시는 크기로 조정하세요 */
         font-weight: bold !important;
         padding: 15px 30px !important;
     }
