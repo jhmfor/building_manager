@@ -8,7 +8,7 @@ import re
 # 페이지 설정
 st.set_page_config(page_title="건물주 스마트 비서", page_icon="🏢", layout="centered")
 st.title("🏢 건물주 스마트 비서 (Pro Version)")
-st.markdown("임대 계약은 카드형 UI로 안전하게, 지출 및 이력 장부는 표에서 바로 수정하세요!")
+st.markdown("임대 계약은 카드형 UI로, 장부들은 검색 기능과 표 직접 수정 기능이 완벽 결합되었습니다!")
 
 # --- 유틸리티 함수: 천 단위 콤마 자동 포맷팅 ---
 def format_currency(value):
@@ -69,7 +69,7 @@ history_df = load_history()
 tab1, tab2, tab3 = st.tabs(["📋 임대 계약 및 관리", "💰 지출 및 공사 장부", "📁 지난 계약 및 매매 관리"])
 
 # ==========================================
-# [1페이지] 임대 계약 및 관리 (기존 마스터 카드형 UI 복원)
+# [1페이지] 임대 계약 및 관리 (기존 마스터 카드형 UI)
 # ==========================================
 with tab1:
     st.subheader("현재 임대 계약 현황 및 관리")
@@ -241,14 +241,38 @@ with tab1:
                 st.rerun()
 
 # ==========================================
-# [2페이지] 지출 장부 (표 형태 수정/삭제 적용)
+# [2페이지] 지출 및 공사 장부 (검색 + 총지출 + 표 수정)
 # ==========================================
 with tab2:
     st.subheader("💰 건물 유지보수 및 지출 장부")
     
-    if not expenses_df.empty:
+    current_expenses_df = expenses_df.copy()
+    exp_search = st.text_input("🔍 지출 내역 검색", placeholder="건물명, 호실, 내역 또는 카테고리 검색", key="exp_search_input")
+    
+    display_expenses = current_expenses_df.copy()
+    if exp_search and not display_expenses.empty:
+        mask = display_expenses.apply(lambda row: row.astype(str).str.contains(exp_search, case=False).any(), axis=1)
+        display_expenses = display_expenses[mask]
+    
+    total_cost = 0
+    target_col = "비용" if "비용" in display_expenses.columns else None
+    
+    if not display_expenses.empty and target_col:
+        numeric_costs = display_expenses[target_col].astype(str).str.replace(r'[^\d]', '', regex=True)
+        total_cost = pd.to_numeric(numeric_costs, errors='coerce').sum()
+    
+    st.markdown(
+        f"""
+        <div style="background-color: #e8f4f8; padding: 15px; border-radius: 10px; margin-bottom: 15px; border-left: 5px solid #1f77b4;">
+            📊 현재 검색된 내역 <b>총 지출 비용</b>: <span style="color: #d9534f; font-size: 1.2em; font-weight: bold;">{total_cost:,.0f} 원</span>
+        </div>
+        """, 
+        unsafe_allow_html=True
+    )
+    
+    if not display_expenses.empty:
         edited_e_df = st.data_editor(
-            expenses_df, 
+            display_expenses, 
             key="expense_editor", 
             num_rows="dynamic",
             use_container_width=True,
@@ -280,7 +304,7 @@ with tab2:
                     st.warning(f"ID {del_e_id} 지출이 삭제되었습니다.")
                     st.rerun()
     else:
-        st.info("지출 내역이 없습니다.")
+        st.info("조건에 맞는 지출 내역이 없습니다.")
         
     st.markdown("---")
     with st.expander("➕ 신규 지출 추가하기"):
@@ -299,14 +323,20 @@ with tab2:
                 st.rerun()
 
 # ==========================================
-# [3페이지] 지난 계약 및 매매 (표 형태 수정/삭제 적용)
+# [3페이지] 지난 계약 및 매매 (검색 + 표 수정)
 # ==========================================
 with tab3:
     st.subheader("📁 지난 계약 및 매매 이력 장부")
+    search_query = st.text_input("🔍 항목별 검색", placeholder="검색어를 입력하세요", key="history_search")
     
-    if not history_df.empty:
+    filtered_history = history_df.copy()
+    if search_query and len(filtered_history) > 0:
+        mask = filtered_history.apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)
+        filtered_history = filtered_history[mask]
+    
+    if not filtered_history.empty:
         edited_h_df = st.data_editor(
-            history_df, 
+            filtered_history, 
             key="history_editor", 
             num_rows="dynamic",
             use_container_width=True,
@@ -339,7 +369,7 @@ with tab3:
                     st.warning(f"ID {del_h_id} 이력이 삭제되었습니다.")
                     st.rerun()
     else:
-        st.info("이력 장부가 비어 있습니다.")
+        st.info("검색 결과와 일치하는 이력 장부가 없습니다.")
 
     def create_excel(df1, df2, df3):
         output = BytesIO()
